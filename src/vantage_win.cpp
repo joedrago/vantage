@@ -1,5 +1,7 @@
 #include "vantage.h"
 
+#include <windowsx.h>
+
 #define VANTAGE_STYLE_WINDOWED   (WS_OVERLAPPEDWINDOW | WS_VISIBLE)
 #define VANTAGE_STYLE_FULLSCREEN (WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE)
 
@@ -9,7 +11,7 @@ bool Vantage::createWindow() //(HINSTANCE hInstance, LPWSTR lpCmdLine, int nCmdS
 {
     WNDCLASSEX wcex;
     wcex.cbSize = sizeof( WNDCLASSEX );
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wcex.lpfnWndProc = WndProc;
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
@@ -109,6 +111,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case 113: // Q
                     PostQuitMessage(0);
                     break;
+                case 114: // R
+                    if (v)
+                        v->resetImagePos();
+                    break;
 
                 case 32: // Space
                     if (v)
@@ -137,6 +143,47 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             }
             break;
         }
+
+        case WM_LBUTTONDOWN:
+            if (v) {
+                int x = GET_X_LPARAM(lParam);
+                int y = GET_Y_LPARAM(lParam);
+                v->mouseLeftDown(x, y);
+            }
+            break;
+
+        case WM_LBUTTONDBLCLK:
+            if (v) {
+                int x = GET_X_LPARAM(lParam);
+                int y = GET_Y_LPARAM(lParam);
+                v->mouseLeftDoubleClick(x, y);
+            }
+            break;
+
+        case WM_LBUTTONUP:
+            if (v) {
+                int x = GET_X_LPARAM(lParam);
+                int y = GET_Y_LPARAM(lParam);
+                v->mouseLeftUp(x, y);
+            }
+            break;
+
+        case WM_MOUSEMOVE:
+            if (v) {
+                int x = GET_X_LPARAM(lParam);
+                int y = GET_Y_LPARAM(lParam);
+                v->mouseMove(x, y);
+            }
+            break;
+
+        case WM_MOUSEWHEEL:
+            if (v) {
+                int x = GET_X_LPARAM(lParam);
+                int y = GET_Y_LPARAM(lParam);
+                int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+                v->mouseWheel(x, y, delta);
+            }
+            break;
 
         case WM_DROPFILES:
         {

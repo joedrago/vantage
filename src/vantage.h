@@ -55,6 +55,13 @@ public:
     void loadImage(int offset);
     void unloadImage(bool unloadColoristImage = true);
     void kickOverlay();
+    void resetImagePos();
+
+    void mouseLeftDown(int x, int y);
+    void mouseLeftUp(int x, int y);
+    void mouseLeftDoubleClick(int x, int y);
+    void mouseMove(int x, int y);
+    void mouseWheel(int x, int y, int delta);
 
 protected:
     bool createWindow();
@@ -71,6 +78,10 @@ protected:
 
     void clearOverlay();
     void appendOverlay(const char * format, ...);
+
+    void calcImageSize();
+    void calcCenteredImagePos(float & posX, float & posY);
+    void clampImagePos();
 
 protected:
     HINSTANCE hInstance_;
@@ -107,12 +118,26 @@ protected:
     SpriteFont * fontSmall_;
     SpriteBatch * spriteBatch_;
 
+    // Overlay
     std::vector<std::string> overlay_;
     DWORD overlayTick_;
     static const unsigned int MAX_OVERLAY_LINES = 4;
 
+    // Image list
     std::vector<std::string> imageFiles_;
     int imageFileIndex_;
+
+    // Mouse tracking
+    bool dragging_;
+    int dragStartX_;
+    int dragStartY_;
+
+    // Image positioning
+    float imagePosX_; // x
+    float imagePosY_; // y
+    float imagePosW_; // width
+    float imagePosH_; // height
+    float imagePosS_; // scale
 };
 
 #endif // ifndef VANTAGE_H

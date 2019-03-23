@@ -9,6 +9,7 @@
 using namespace DirectX;
 
 static XMVECTORF32 backgroundColor = { { { 0.000000000f, 0.000000000f, 0.000000000f, 1.000000000f } } };
+static const float MAX_SCALE = 32.0f;
 
 void Vantage::unloadImage(bool unloadColoristImage)
 {
@@ -114,6 +115,8 @@ void Vantage::loadImage(int offset)
     coloristImage_ = clContextRead(coloristContext_, filename, nullptr, nullptr);
     prepareImage();
 
+    resetImagePos();
+
     clearOverlay();
     if (coloristImage_) {
         appendOverlay("[%d/%d] Loaded: %s", imageFileIndex_ + 1, imageFiles_.size(), filename);
@@ -193,6 +196,166 @@ void Vantage::prepareImage()
     }
 }
 
+void Vantage::calcImageSize()
+{
+    if (!coloristImage_) {
+        imagePosW_ = 1;
+        imagePosH_ = 1;
+        return;
+    }
+
+    RECT clientRect;
+    GetClientRect(hwnd_, &clientRect);
+    float clientW = (float)clientRect.right;
+    float clientH = (float)clientRect.bottom;
+
+    float imageW = (float)coloristImage_->width;
+    float imageH = (float)coloristImage_->height;
+    float clientRatio = clientW / clientH;
+    float imageRatio = imageW / imageH;
+
+    if (clientRatio < imageRatio) {
+        imagePosW_ = clientW;
+        imagePosH_ = clientW / imageW * imageH;
+    } else {
+        imagePosH_ = clientH;
+        imagePosW_ = clientH / imageH * imageW;
+    }
+
+    imagePosW_ *= imagePosS_;
+    imagePosH_ *= imagePosS_;
+}
+
+void Vantage::calcCenteredImagePos(float & posX, float & posY)
+{
+    if (!coloristImage_) {
+        posX = 0;
+        posY = 0;
+        return;
+    }
+
+    RECT clientRect;
+    GetClientRect(hwnd_, &clientRect);
+    float clientW = (float)clientRect.right;
+    float clientH = (float)clientRect.bottom;
+    posX = (clientW - imagePosW_) / 2.0f;
+    posY = (clientH - imagePosH_) / 2.0f;
+}
+
+void Vantage::resetImagePos()
+{
+    imagePosS_ = 1.0f;
+    calcImageSize();
+    calcCenteredImagePos(imagePosX_, imagePosY_);
+}
+
+void Vantage::mouseLeftDown(int x, int y)
+{
+    // appendOverlay("mouseLeftDown(%d, %d)", x, y);
+    dragging_ = true;
+    dragStartX_ = x;
+    dragStartY_ = y;
+}
+
+void Vantage::mouseLeftUp(int x, int y)
+{
+    // appendOverlay("mouseLeftUp(%d, %d)", x, y);
+    dragging_ = false;
+}
+
+void Vantage::mouseMove(int x, int y)
+{
+    // appendOverlay("mouseMove(%d, %d)", x, y);
+    if (dragging_) {
+        float dx = (float)(x - dragStartX_);
+        float dy = (float)(y - dragStartY_);
+        imagePosX_ += dx;
+        imagePosY_ += dy;
+
+        clampImagePos();
+
+        dragStartX_ = x;
+        dragStartY_ = y;
+    }
+}
+
+void Vantage::mouseLeftDoubleClick(int x, int y)
+{
+    // appendOverlay("mouseLeftDoubleClick(%d, %d)", x, y);
+
+    const float scaleTiers[] = { 1.0f, 2.0f, 4.0f, 8.0f, 16.0f, 32.0f };
+    const int scaleTierCount = sizeof(scaleTiers) / sizeof(scaleTiers[0]);
+    int scaleIndex = 0;
+    for (int i = 0; i < scaleTierCount; ++i) {
+        if (imagePosS_ < scaleTiers[i]) {
+            break;
+        }
+        scaleIndex = i;
+    }
+    scaleIndex = (scaleIndex + 1) % scaleTierCount;
+    imagePosS_ = scaleTiers[scaleIndex];
+
+    float normalizedImagePosX = (x - imagePosX_) / imagePosW_;
+    float normalizedImagePosY = (y - imagePosY_) / imagePosH_;
+    calcImageSize();
+    imagePosX_ = (float)x - normalizedImagePosX * imagePosW_;
+    imagePosY_ = (float)y - normalizedImagePosY * imagePosH_;
+    clampImagePos();
+}
+
+void Vantage::mouseWheel(int x, int y, int delta)
+{
+    // appendOverlay("mouseWheel(%d, %d, %d)", x, y, delta);
+    imagePosS_ += (float)delta / 240.0f;
+    if (imagePosS_ < 1.0f) {
+        imagePosS_ = 1.0f;
+    }
+    if (imagePosS_ > MAX_SCALE) {
+        imagePosS_ = MAX_SCALE;
+    }
+
+    float normalizedImagePosX = (x - imagePosX_) / imagePosW_;
+    float normalizedImagePosY = (y - imagePosY_) / imagePosH_;
+    calcImageSize();
+    imagePosX_ = (float)x - normalizedImagePosX * imagePosW_;
+    imagePosY_ = (float)y - normalizedImagePosY * imagePosH_;
+    clampImagePos();
+}
+
+void Vantage::clampImagePos()
+{
+    RECT clientRect;
+    GetClientRect(hwnd_, &clientRect);
+    float clientW = (float)clientRect.right;
+    float clientH = (float)clientRect.bottom;
+
+    float centerX, centerY;
+    calcCenteredImagePos(centerX, centerY);
+
+    if (imagePosW_ < clientW) {
+        imagePosX_ = centerX;
+    } else {
+        // clamp to fit in screen bounds
+        if (imagePosX_ > 0) {
+            imagePosX_ = 0;
+        }
+        if ((imagePosX_ + imagePosW_) < clientW) {
+            imagePosX_ = clientW - imagePosW_;
+        }
+    }
+
+    if (imagePosH_ < clientH) {
+        imagePosY_ = centerY;
+    } else {
+        if (imagePosY_ > 0) {
+            imagePosY_ = 0;
+        }
+        if ((imagePosY_ + imagePosH_) < clientH) {
+            imagePosY_ = clientH - imagePosH_;
+        }
+    }
+}
+
 void Vantage::render()
 {
     context_->OMSetRenderTargets(1, &renderTarget_, nullptr);
@@ -211,29 +374,12 @@ void Vantage::render()
         float imageW = (float)coloristImage_->width;
         float imageH = (float)coloristImage_->height;
 
-        // TODO: Move math into mouse handling code somewhere, and only
-        //       record/advertise posX/posY/reqW/reqH to this
-        float clientRatio = clientW / clientH;
-        float imageRatio = imageW / imageH;
-        float posX, posY, reqW, reqH;
-        if (clientRatio < imageRatio) {
-            reqW = clientW;
-            reqH = clientW / imageW * imageH;
-            posX = 0.0f;
-            posY = (clientH - reqH) / 2;
-        } else {
-            reqH = clientH;
-            reqW = clientH / imageH * imageW;
-            posX = (clientW - reqW) / 2;
-            posY = 0.0f;
-        }
-
-        float scaleX = reqW / imageW;
-        float scaleY = reqH / imageH;
+        float scaleX = imagePosW_ / imageW;
+        float scaleY = imagePosH_ / imageH;
         ConstantBuffer cb;
         cb.transform = XMMatrixIdentity();
         cb.transform *= XMMatrixScaling(imageW * scaleX, imageH * scaleY, 1.0f);
-        cb.transform *= XMMatrixTranslation(posX, posY, 0.0f);
+        cb.transform *= XMMatrixTranslation(imagePosX_, imagePosY_, 0.0f);
         cb.transform *= XMMatrixOrthographicOffCenterRH(0.0f, clientW, clientH, 0.0f, -1.0f, 1.0f);
         cb.params = XMFLOAT4(
             1.0f, // hdrActive_ ? 1.0f : 0.0f,

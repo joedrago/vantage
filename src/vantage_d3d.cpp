@@ -215,7 +215,7 @@ HRESULT Vantage::createDevice()
 
     D3D11_SAMPLER_DESC sampDesc;
     ZeroMemory(&sampDesc, sizeof(sampDesc));
-    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
     sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -333,9 +333,9 @@ void Vantage::resizeSwapChain()
     swapChain_->GetDesc(&swapChainDesc);
     bool resizeSwapChain = (swapChainDesc.BufferDesc.Width != width) || (swapChainDesc.BufferDesc.Height != height);
     if (resizeSwapChain) {
-        char debugString[128];
-        sprintf(debugString, "ResizeBuffers: %dx%d\n", width, height);
-        OutputDebugString(debugString);
+        // char debugString[128];
+        // sprintf(debugString, "ResizeBuffers: %dx%d\n", width, height);
+        // OutputDebugString(debugString);
 
         swapChain_->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     }
@@ -360,7 +360,10 @@ void Vantage::resizeSwapChain()
     vp.TopLeftY = 0;
     context_->RSSetViewports(1, &vp);
 
-    render();
+    if (resizeSwapChain) {
+        resetImagePos();
+        render();
+    }
 }
 
 void Vantage::checkHDR()
