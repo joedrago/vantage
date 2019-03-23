@@ -29,9 +29,11 @@ add_custom_command(
 
 include_directories(
     src
+    fonts
     ${CMAKE_BINARY_DIR}
     ${CMAKE_SOURCE_DIR}/ext/colorist/lib/include
     ${CMAKE_SOURCE_DIR}/ext/colorist/ext/openjpeg/thirdparty/liblcms2/include # this is awful! fix this in colorist
+    ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Inc
 )
 add_executable(vantage WIN32
     res/small.ico
@@ -50,5 +52,12 @@ add_executable(vantage WIN32
     src/vantage_d3d.cpp
     src/vantage_image.cpp
     src/vantage_win.cpp
+
+    # DirectXTK
+    ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/BinaryReader.cpp
+    ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/CommonStates.cpp
+    ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/SpriteBatch.cpp
+    ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/SpriteFont.cpp
+    ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/VertexTypes.cpp
 )
 target_link_libraries(vantage colorist)

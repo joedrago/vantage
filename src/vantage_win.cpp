@@ -98,12 +98,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     if (v)
                         v->onToggleFullscreen();
                     break;
-#if 0
+
                 case 32: // Space
-                    forceSDR_ = !forceSDR_;
-                    updateWindowTitle();
+                    if (v)
+                        v->kickOverlay();
                     break;
 
+#if 0
                 case 110: // N
                     currentTextureIndex_ = (currentTextureIndex_ + 1) % TEXTURE_COUNT;
                     updateWindowTitle();

@@ -2,6 +2,10 @@
 
 #include "vertexShader.h"
 #include "pixelShader.h"
+#include "fontSmall.h"
+
+#include <locale>
+#include <codecvt>
 
 HRESULT Vantage::createDevice()
 {
@@ -148,8 +152,6 @@ HRESULT Vantage::createDevice()
     if (FAILED(hr)) {
         return hr;
     }
-    // Set the input layout
-    context_->IASetInputLayout(vertexLayout_);
 
     // Create constant buffer
     {
@@ -192,10 +194,6 @@ HRESULT Vantage::createDevice()
     if (FAILED(hr)) {
         return hr;
     }
-    // Set vertex buffer
-    UINT stride = sizeof( SimpleVertex );
-    UINT offset = 0;
-    context_->IASetVertexBuffers(0, 1, &vertexBuffer_, &stride, &offset);
 
     // Create index buffer
     // Create vertex buffer
@@ -214,11 +212,6 @@ HRESULT Vantage::createDevice()
     if (FAILED(hr)) {
         return hr;
     }
-    // Set index buffer
-    context_->IASetIndexBuffer(indexBuffer_, DXGI_FORMAT_R16_UINT, 0);
-
-    // Set primitive topology
-    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     D3D11_SAMPLER_DESC sampDesc;
     ZeroMemory(&sampDesc, sizeof(sampDesc));
@@ -234,11 +227,22 @@ HRESULT Vantage::createDevice()
         return hr;
     }
 
+    fontSmall_ = new SpriteFont(device_, fontSmallBinaryData, fontSmallBinarySize);
+    spriteBatch_ = new SpriteBatch(context_);
     return S_OK;
 }
 
 void Vantage::destroyDevice()
 {
+    if (spriteBatch_) {
+        delete spriteBatch_;
+        spriteBatch_ = nullptr;
+    }
+    if (fontSmall_) {
+        delete fontSmall_;
+        fontSmall_ = nullptr;
+    }
+
     if (context_) {
         context_->ClearState();
         context_ = nullptr;
@@ -399,9 +403,34 @@ void Vantage::checkHDR()
 
     if (hdrActive_ != hdrWasActive) {
         if (hdrActive_) {
-            OutputDebugString("HDR: ACTIVE\n");
+            appendOverlay("HDR: Active");
         } else {
-            OutputDebugString("HDR: INACTIVE\n");
+            appendOverlay("HDR: Inactive");
         }
     }
+}
+
+void Vantage::beginText()
+{
+    spriteBatch_->Begin();
+}
+
+void Vantage::drawText(const char * text, float x, float y, float r, float g, float b, float a)
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
+    std::wstring output = converter.from_bytes(text);
+
+    XMFLOAT2 fontPos;
+    fontPos.x = x;
+    fontPos.y = y;
+    XMFLOAT2 origin;
+    origin.x = 0.0f;
+    origin.y = 0.0f;
+    XMVECTORF32 fontColor = { { { r, g, b, a } } };
+    fontSmall_->DrawString(spriteBatch_, output.c_str(), fontPos, fontColor, 0.f, origin);
+}
+
+void Vantage::endText()
+{
+    spriteBatch_->End();
 }

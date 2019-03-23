@@ -8,6 +8,12 @@
 #pragma comment(lib, "d3d11.lib")
 using namespace DirectX;
 
+#include "SpriteBatch.h"
+#include "SpriteFont.h"
+
+#include <string>
+#include <vector>
+
 extern "C" {
 #include "colorist/colorist.h"
 }
@@ -47,6 +53,7 @@ public:
     void onWindowPosChanged(int x, int y, int w, int h);
     void loadImage(const char * filename);
     void unloadImage(bool unloadColoristImage = true);
+    void kickOverlay();
 
 protected:
     bool createWindow();
@@ -57,6 +64,12 @@ protected:
     void resizeSwapChain();
     void checkHDR(); // updates hdrActive_
     void prepareImage();
+    void beginText();
+    void drawText(const char * text, float x, float y, float r, float g, float b, float a);
+    void endText();
+
+    void clearOverlay();
+    void appendOverlay(const char * format, ...);
 
 protected:
     HINSTANCE hInstance_;
@@ -88,6 +101,14 @@ protected:
     ID3D11Buffer * indexBuffer_;
     ID3D11SamplerState * sampler_;
     ID3D11ShaderResourceView * image_;
+
+    // Fonts
+    SpriteFont * fontSmall_;
+    SpriteBatch * spriteBatch_;
+
+    std::vector<std::string> overlay_;
+    DWORD overlayTick_;
+    static const unsigned int MAX_OVERLAY_LINES = 4;
 };
 
 #endif // ifndef VANTAGE_H

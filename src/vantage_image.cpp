@@ -27,6 +27,13 @@ void Vantage::loadImage(const char * filename)
 
     coloristImage_ = clContextRead(coloristContext_, filename, nullptr, nullptr);
     prepareImage();
+
+    clearOverlay();
+    if (coloristImage_) {
+        appendOverlay("Loaded: %s", filename);
+    } else {
+        appendOverlay("Failed to load: %s", filename);
+    }
 }
 
 void Vantage::prepareImage()
@@ -147,6 +154,13 @@ void Vantage::render()
             0);
         context_->UpdateSubresource(constantBuffer_, 0, nullptr, &cb, 0, 0);
 
+        UINT stride = sizeof( SimpleVertex );
+        UINT offset = 0;
+        context_->IASetVertexBuffers(0, 1, &vertexBuffer_, &stride, &offset);
+        context_->IASetInputLayout(vertexLayout_);
+        context_->IASetIndexBuffer(indexBuffer_, DXGI_FORMAT_R16_UINT, 0);
+        context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
         context_->VSSetShader(vertexShader_, nullptr, 0);
         context_->VSSetConstantBuffers(0, 1, &constantBuffer_);
         context_->PSSetShader(pixelShader_, nullptr, 0);
@@ -155,5 +169,24 @@ void Vantage::render()
         context_->PSSetSamplers(0, 1, &sampler_);
         context_->DrawIndexed(6, 0, 0);
     }
+
+    DWORD now = GetTickCount();
+    DWORD dt = now - overlayTick_;
+    if (!overlay_.empty() && (dt < 3000)) {
+        beginText();
+        int i = 0;
+        float alpha = 1.0f;
+        if (dt > 2000) {
+            alpha = (1000 - (dt - 2000)) / 1000.0f;
+        }
+
+        const float shadowOffset = 2.0f;
+        for (auto it = overlay_.begin(); it != overlay_.end(); ++it, ++i) {
+            drawText(it->c_str(), 10 + shadowOffset, 10.0f + shadowOffset + (i * 20.0f), 0.0f, 0.0f, 0.0f, alpha);
+            drawText(it->c_str(), 10, 10.0f + (i * 20.0f), alpha, alpha, alpha, alpha);
+        }
+        endText();
+    }
+
     swapChain_->Present(1, 0);
 }
