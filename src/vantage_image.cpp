@@ -23,6 +23,9 @@ void Vantage::unloadImage(bool unloadColoristImage)
         clImageDestroy(coloristContext_, coloristImage_);
         coloristImage_ = nullptr;
     }
+
+    imageInfoX_ = -1;
+    imageInfoY_ = -1;
 }
 
 // This could potentially use clFormatDetect() instead, but that'd cause a lot of header reads.
@@ -279,6 +282,23 @@ void Vantage::mouseMove(int x, int y)
     }
 }
 
+void Vantage::mouseSetPos(int x, int y)
+{
+    int right = (int)(imagePosX_ + imagePosW_);
+    int bottom = (int)(imagePosY_ + imagePosH_);
+
+    kickOverlay();
+
+    if (!coloristImage_ || (x < imagePosX_) || (y < imagePosY_) || (x >= right) || (y >= bottom)) {
+        imageInfoX_ = -1;
+        imageInfoY_ = -1;
+    } else {
+        imageInfoX_ = (int)(((float)x - imagePosX_) * ((float)coloristImage_->width / imagePosW_));
+        imageInfoY_ = (int)(((float)y - imagePosY_) * ((float)coloristImage_->height / imagePosH_));
+        clImageDebugDumpPixel(coloristContext_, coloristImage_, imageInfoX_, imageInfoY_, &pixelInfo_);
+    }
+}
+
 void Vantage::mouseLeftDoubleClick(int x, int y)
 {
     // appendOverlay("mouseLeftDoubleClick(%d, %d)", x, y);
@@ -408,17 +428,23 @@ void Vantage::render()
     DWORD dt = now - overlayTick_;
     if (!overlay_.empty() && (dt < 3000)) {
         beginText();
+
         int i = 0;
         float alpha = 1.0f;
         if (dt > 2000) {
             alpha = (1000 - (dt - 2000)) / 1000.0f;
         }
 
-        const float shadowOffset = 2.0f;
+        if (coloristImage_ && (imageInfoX_ != -1) && (imageInfoY_ != -1)) {
+            char buffer[128];
+            sprintf(buffer, "RAW (%d,%d): (%d,%d,%d,%d)", imageInfoX_, imageInfoY_, (int)pixelInfo_.rawR, (int)pixelInfo_.rawG, (int)pixelInfo_.rawB, (int)pixelInfo_.rawA);
+            drawText(buffer, 10, clientH - 20.0f, alpha, alpha, alpha, alpha);
+        }
+
         for (auto it = overlay_.begin(); it != overlay_.end(); ++it, ++i) {
-            drawText(it->c_str(), 10 + shadowOffset, 10.0f + shadowOffset + (i * 20.0f), 0.0f, 0.0f, 0.0f, alpha);
             drawText(it->c_str(), 10, 10.0f + (i * 20.0f), alpha, alpha, alpha, alpha);
         }
+
         endText();
     }
 

@@ -131,7 +131,7 @@ HRESULT Vantage::createDevice()
     dxgiFactory->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
     dxgiFactory->Release();
 
-    resizeSwapChain();
+    resizeSwapChain(true);
 
     // Create the vertex shader
     hr = device_->CreateVertexShader(g_VS, sizeof(g_VS), nullptr, &vertexShader_);
@@ -312,7 +312,7 @@ void Vantage::destroyDevice()
     }
 }
 
-void Vantage::resizeSwapChain()
+void Vantage::resizeSwapChain(bool initializing)
 {
     if (!swapChain_) {
         return;
@@ -360,7 +360,7 @@ void Vantage::resizeSwapChain()
     vp.TopLeftY = 0;
     context_->RSSetViewports(1, &vp);
 
-    if (resizeSwapChain) {
+    if (!initializing && resizeSwapChain) {
         resetImagePos();
         render();
     }
@@ -423,13 +423,23 @@ void Vantage::drawText(const char * text, float x, float y, float r, float g, fl
     std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
     std::wstring output = converter.from_bytes(text);
 
+    const float shadowOffset = 2.0f;
+
+    XMVECTORF32 shadowColor = { { { 0, 0, 0, a } } };
+    XMFLOAT2 shadowPos;
+    shadowPos.x = x + shadowOffset;
+    shadowPos.y = y + shadowOffset;
+
+    XMVECTORF32 fontColor = { { { r, g, b, a } } };
     XMFLOAT2 fontPos;
     fontPos.x = x;
     fontPos.y = y;
+
     XMFLOAT2 origin;
     origin.x = 0.0f;
     origin.y = 0.0f;
-    XMVECTORF32 fontColor = { { { r, g, b, a } } };
+
+    fontSmall_->DrawString(spriteBatch_, output.c_str(), shadowPos, shadowColor, 0.f, origin);
     fontSmall_->DrawString(spriteBatch_, output.c_str(), fontPos, fontColor, 0.f, origin);
 }
 

@@ -152,6 +152,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             }
             break;
 
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+            if (v) {
+                int x = GET_X_LPARAM(lParam);
+                int y = GET_Y_LPARAM(lParam);
+                v->mouseSetPos(x, y);
+            }
+            break;
+
         case WM_LBUTTONDBLCLK:
             if (v) {
                 int x = GET_X_LPARAM(lParam);
@@ -173,6 +182,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 int x = GET_X_LPARAM(lParam);
                 int y = GET_Y_LPARAM(lParam);
                 v->mouseMove(x, y);
+                if (wParam & MK_RBUTTON) {
+                    v->mouseSetPos(x, y);
+                }
             }
             break;
 

@@ -62,6 +62,7 @@ public:
     void mouseLeftDoubleClick(int x, int y);
     void mouseMove(int x, int y);
     void mouseWheel(int x, int y, int delta);
+    void mouseSetPos(int x, int y);
 
 protected:
     bool createWindow();
@@ -69,7 +70,7 @@ protected:
     void destroyDevice();
     void updateWindowPos();
     void render();
-    void resizeSwapChain();
+    void resizeSwapChain(bool initializing = false);
     void checkHDR(); // updates hdrActive_
     void prepareImage();
     void beginText();
@@ -138,6 +139,11 @@ protected:
     float imagePosW_; // width
     float imagePosH_; // height
     float imagePosS_; // scale
+
+    // Image info
+    int imageInfoX_;
+    int imageInfoY_;
+    clImagePixelInfo pixelInfo_;
 };
 
 #endif // ifndef VANTAGE_H

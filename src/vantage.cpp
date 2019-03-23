@@ -9,6 +9,8 @@ Vantage::Vantage(HINSTANCE hInstance)
     , coloristContext_(nullptr)
     , coloristImage_(nullptr)
     , overlayTick_(0)
+    , imageInfoX_(-1)
+    , imageInfoY_(-1)
 
     , driverType_(D3D_DRIVER_TYPE_NULL)
     , featureLevel_(D3D_FEATURE_LEVEL_11_0)
