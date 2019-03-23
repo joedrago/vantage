@@ -1,5 +1,8 @@
 #include "vantage.h"
 
+#include <algorithm>
+#include <shlwapi.h>
+
 #include <dxgi1_6.h>
 #include <directxmath.h>
 #pragma comment(lib, "d3d11.lib")
@@ -21,19 +24,104 @@ void Vantage::unloadImage(bool unloadColoristImage)
     }
 }
 
+// This could potentially use clFormatDetect() instead, but that'd cause a lot of header reads.
+static bool isImageFile(const char * filename)
+{
+    const char * ext = strrchr(filename, '.');
+    if (ext) {
+        if (!strcmp(ext, ".apg")) return true;
+        if (!strcmp(ext, ".avif")) return true;
+        if (!strcmp(ext, ".bmp")) return true;
+        if (!strcmp(ext, ".jpg")) return true;
+        if (!strcmp(ext, ".jp2")) return true;
+        if (!strcmp(ext, ".j2k")) return true;
+        if (!strcmp(ext, ".png")) return true;
+        if (!strcmp(ext, ".tiff")) return true;
+        if (!strcmp(ext, ".webp")) return true;
+    }
+    return false;
+}
+
+static bool sortAlphabeticallyIgnoringCase(const std::string & a, const std::string & b) { return _stricmp(a.c_str(), b.c_str()) < 0; }
+
 void Vantage::loadImage(const char * filename)
+{
+    char fullFilename[MAX_PATH];
+    GetFullPathNameA(filename, MAX_PATH, fullFilename, nullptr);
+    char directory[MAX_PATH];
+    memcpy(directory, fullFilename, MAX_PATH);
+    PathRemoveFileSpec(directory);
+    std::string wildcard = directory;
+    wildcard += "\\*";
+
+    imageFiles_.clear();
+
+    WIN32_FIND_DATA wfd;
+    HANDLE hFind = FindFirstFile(wildcard.c_str(), &wfd);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (wfd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_DEVICE)) {
+                continue;
+            }
+            std::string foundFilenameStr = directory;
+            foundFilenameStr += "\\";
+            foundFilenameStr += wfd.cFileName;
+            char foundFilename[MAX_PATH];
+            GetFullPathNameA(foundFilenameStr.c_str(), MAX_PATH, foundFilename, nullptr);
+            if (isImageFile(foundFilename)) {
+                imageFiles_.push_back(foundFilename);
+            }
+        } while (FindNextFile(hFind, &wfd));
+    }
+
+    std::sort(imageFiles_.begin(), imageFiles_.end(), sortAlphabeticallyIgnoringCase);
+
+    int requestedFilenameIndex = -1;
+    int index = 0;
+    for (auto it = imageFiles_.begin(); it != imageFiles_.end(); ++it, ++index) {
+        if (!strcmp(it->c_str(), fullFilename)) {
+            requestedFilenameIndex = index;
+        }
+    }
+
+    if (requestedFilenameIndex == -1) {
+        // Somehow the original file wasn't found, tack it onto the end of the list
+        imageFiles_.push_back(fullFilename);
+        requestedFilenameIndex = (int)imageFiles_.size() - 1;
+    }
+
+    imageFileIndex_ = requestedFilenameIndex;
+    loadImage(0);
+}
+
+void Vantage::loadImage(int offset)
 {
     unloadImage();
 
+    if (imageFiles_.empty()) {
+        return;
+    }
+    int loadIndex = imageFileIndex_ + offset;
+    if (loadIndex < 0) {
+        loadIndex = (int)imageFiles_.size() - 1;
+    }
+    if (loadIndex >= imageFiles_.size()) {
+        loadIndex = 0;
+    }
+    imageFileIndex_ = loadIndex;
+
+    const char * filename = imageFiles_[imageFileIndex_].c_str();
     coloristImage_ = clContextRead(coloristContext_, filename, nullptr, nullptr);
     prepareImage();
 
     clearOverlay();
     if (coloristImage_) {
-        appendOverlay("Loaded: %s", filename);
+        appendOverlay("[%d/%d] Loaded: %s", imageFileIndex_ + 1, imageFiles_.size(), filename);
     } else {
-        appendOverlay("Failed to load: %s", filename);
+        appendOverlay("[%d/%d] Failed to load: %s", imageFileIndex_ + 1, imageFiles_.size(), filename);
     }
+
+    render();
 }
 
 void Vantage::prepareImage()

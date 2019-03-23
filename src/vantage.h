@@ -52,6 +52,7 @@ public:
     void onToggleFullscreen();
     void onWindowPosChanged(int x, int y, int w, int h);
     void loadImage(const char * filename);
+    void loadImage(int offset);
     void unloadImage(bool unloadColoristImage = true);
     void kickOverlay();
 
@@ -109,6 +110,9 @@ protected:
     std::vector<std::string> overlay_;
     DWORD overlayTick_;
     static const unsigned int MAX_OVERLAY_LINES = 4;
+
+    std::vector<std::string> imageFiles_;
+    int imageFileIndex_;
 };
 
 #endif // ifndef VANTAGE_H

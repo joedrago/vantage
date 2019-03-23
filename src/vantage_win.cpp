@@ -94,35 +94,46 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         {
             unsigned int key = (unsigned int)wParam;
             switch (key) {
+                case 97: // A
+                    if (v)
+                        v->loadImage(-1);
+                    break;
+                case 100: // D
+                    if (v)
+                        v->loadImage(1);
+                    break;
                 case 102: // F
                     if (v)
                         v->onToggleFullscreen();
+                    break;
+                case 113: // Q
+                    PostQuitMessage(0);
                     break;
 
                 case 32: // Space
                     if (v)
                         v->kickOverlay();
                     break;
+            }
+            break;
+        }
 
-#if 0
-                case 110: // N
-                    currentTextureIndex_ = (currentTextureIndex_ + 1) % TEXTURE_COUNT;
-                    updateWindowTitle();
+        case WM_KEYDOWN:
+        {
+            switch (wParam) {
+                case VK_ESCAPE:
+                    PostQuitMessage(0);
                     break;
-
-                case 112: // P
-                    --currentTextureIndex_;
-                    if (currentTextureIndex_ < 0) {
-                        currentTextureIndex_ = TEXTURE_COUNT - 1;
-                    }
-                    updateWindowTitle();
+                case VK_LEFT:
+                case VK_UP:
+                    if (v)
+                        v->loadImage(-1);
                     break;
-
-                case 116: // T
-                    tonemap_ = !tonemap_;
-                    updateWindowTitle();
+                case VK_RIGHT:
+                case VK_DOWN:
+                    if (v)
+                        v->loadImage(1);
                     break;
-#endif
             }
             break;
         }
