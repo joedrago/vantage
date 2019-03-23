@@ -32,7 +32,6 @@ include_directories(
     fonts
     ${CMAKE_BINARY_DIR}
     ${CMAKE_SOURCE_DIR}/ext/colorist/lib/include
-    ${CMAKE_SOURCE_DIR}/ext/colorist/ext/openjpeg/thirdparty/liblcms2/include # this is awful! fix this in colorist
     ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Inc
 )
 add_executable(vantage WIN32
