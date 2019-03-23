@@ -58,7 +58,7 @@ bool Vantage::init()
     checkHDR();
 
     // DEBUG, REMOVE ME
-    loadImage("C:\\Users\\jdrago\\Desktop\\newpq\\HDR10.bmp");
+    // loadImage("C:\\Users\\joe\\Desktop\\dump_000.bmp");
 
     return true;
 }

@@ -20,7 +20,7 @@ bool Vantage::createWindow() //(HINSTANCE hInstance, LPWSTR lpCmdLine, int nCmdS
     wcex.lpszMenuName = nullptr;
     wcex.lpszClassName = "vantageWindowClass";
     wcex.hIconSm = LoadIcon(wcex.hInstance, (LPCTSTR)IDI_APPLICATION);
-    if (!RegisterClassEx(&wcex) )
+    if (!RegisterClassEx(&wcex))
         return false;
 
     hwnd_ = CreateWindow("vantageWindowClass", "Vantage", VANTAGE_STYLE_WINDOWED, CW_USEDEFAULT, CW_USEDEFAULT, windowPos_.w, windowPos_.h, nullptr, nullptr, hInstance_, nullptr);

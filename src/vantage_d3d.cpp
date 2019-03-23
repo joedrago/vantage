@@ -53,12 +53,12 @@ HRESULT Vantage::createDevice()
     IDXGIFactory1 * dxgiFactory = nullptr;
     {
         IDXGIDevice * dxgiDevice = nullptr;
-        hr = device_->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void **>(&dxgiDevice) );
+        hr = device_->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void **>(&dxgiDevice));
         if (SUCCEEDED(hr)) {
             IDXGIAdapter * adapter = nullptr;
             hr = dxgiDevice->GetAdapter(&adapter);
             if (SUCCEEDED(hr)) {
-                hr = adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void **>(&dxgiFactory) );
+                hr = adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void **>(&dxgiFactory));
                 adapter->Release();
             }
             dxgiDevice->Release();
@@ -73,12 +73,12 @@ HRESULT Vantage::createDevice()
 
     // Create swap chain
     IDXGIFactory2 * dxgiFactory2 = nullptr;
-    hr = dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void **>(&dxgiFactory2) );
+    hr = dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void **>(&dxgiFactory2));
     if (dxgiFactory2) {
         // DirectX 11.1 or later
-        hr = device_->QueryInterface(__uuidof(ID3D11Device1), reinterpret_cast<void **>(&device1_) );
+        hr = device_->QueryInterface(__uuidof(ID3D11Device1), reinterpret_cast<void **>(&device1_));
         if (SUCCEEDED(hr)) {
-            (void)context_->QueryInterface(__uuidof(ID3D11DeviceContext1), reinterpret_cast<void **>(&context1_) );
+            (void)context_->QueryInterface(__uuidof(ID3D11DeviceContext1), reinterpret_cast<void **>(&context1_));
         }
 
         DXGI_SWAP_CHAIN_DESC1 sd;
@@ -95,7 +95,7 @@ HRESULT Vantage::createDevice()
 
         hr = dxgiFactory2->CreateSwapChainForHwnd(device_, hwnd_, &sd, nullptr, nullptr, &swapChain1_);
         if (SUCCEEDED(hr)) {
-            hr = swapChain1_->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void **>(&swapChain_) );
+            hr = swapChain1_->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void **>(&swapChain_));
         }
 
         dxgiFactory2->Release();
@@ -154,7 +154,7 @@ HRESULT Vantage::createDevice()
     // Create constant buffer
     {
         D3D11_BUFFER_DESC bd;
-        ZeroMemory(&bd, sizeof(bd) );
+        ZeroMemory(&bd, sizeof(bd));
         bd.Usage = D3D11_USAGE_DEFAULT;
         bd.ByteWidth = sizeof(ConstantBuffer);
         bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -173,20 +173,20 @@ HRESULT Vantage::createDevice()
     // Create vertex buffer
     SimpleVertex vertices[] =
     {
-        { XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(0.0f, 1.0f) },
-        { XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT2(1.0f, 0.0f) },
-        { XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT2(1.0f, 1.0f) },
-        { XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(0.0f, 0.0f) },
+        { XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(0.0f, 0.0f) },
+        { XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT2(1.0f, 0.0f) },
+        { XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT2(1.0f, 1.0f) },
+        { XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(0.0f, 1.0f) },
     };
 
     D3D11_BUFFER_DESC bd;
-    ZeroMemory(&bd, sizeof(bd) );
+    ZeroMemory(&bd, sizeof(bd));
     bd.Usage = D3D11_USAGE_DEFAULT;
     bd.ByteWidth = sizeof( SimpleVertex ) * 4;
     bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     bd.CPUAccessFlags = 0;
     D3D11_SUBRESOURCE_DATA InitData;
-    ZeroMemory(&InitData, sizeof(InitData) );
+    ZeroMemory(&InitData, sizeof(InitData));
     InitData.pSysMem = vertices;
     hr = device_->CreateBuffer(&bd, &InitData, &vertexBuffer_);
     if (FAILED(hr)) {
@@ -202,7 +202,7 @@ HRESULT Vantage::createDevice()
     WORD indices[] =
     {
         0, 1, 2,
-        0, 3, 1,
+        0, 2, 3,
     };
 
     bd.Usage = D3D11_USAGE_DEFAULT;
@@ -338,7 +338,7 @@ void Vantage::resizeSwapChain()
 
     // Create a render target view
     ID3D11Texture2D * pBackBuffer = nullptr;
-    HRESULT hr = swapChain_->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void **>( &pBackBuffer ) );
+    HRESULT hr = swapChain_->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void **>( &pBackBuffer ));
     if (FAILED(hr)) {
         return;
     }
@@ -355,6 +355,8 @@ void Vantage::resizeSwapChain()
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
     context_->RSSetViewports(1, &vp);
+
+    render();
 }
 
 void Vantage::checkHDR()

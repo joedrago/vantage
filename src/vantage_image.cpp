@@ -107,35 +107,39 @@ void Vantage::render()
         prepareImage();
     }
 
-    float posX = 0.0f;
-    float posY = 0.0f;
-    float scale = 0.5f;
+    RECT clientRect;
+    GetClientRect(hwnd_, &clientRect);
+    float clientW = (float)clientRect.right;
+    float clientH = (float)clientRect.bottom;
 
-    if (coloristImage_ && image_) {
-#if 0
-        RECT clientRect;
-        GetClientRect(hwnd_, &clientRect);
-
-        float clientW = (float)clientRect.right;
-        float clientH = (float)clientRect.bottom;
+    if (coloristImage_ && image_ && (clientW > 0.0f) && (clientH > 0.0f)) {
         float imageW = (float)coloristImage_->width;
         float imageH = (float)coloristImage_->height;
 
-        float left = posX;
-        float top = posY;
-        float right = left + (imageW * scale);
-        float bottom = top + (imageH * scale);
+        // TODO: Move math into mouse handling code somewhere, and only
+        //       record/advertise posX/posY/reqW/reqH to this
+        float clientRatio = clientW / clientH;
+        float imageRatio = imageW / imageH;
+        float posX, posY, reqW, reqH;
+        if (clientRatio < imageRatio) {
+            reqW = clientW;
+            reqH = clientW / imageW * imageH;
+            posX = 0.0f;
+            posY = (clientH - reqH) / 2;
+        } else {
+            reqH = clientH;
+            reqW = clientH / imageH * imageW;
+            posX = (clientW - reqW) / 2;
+            posY = 0.0f;
+        }
 
-        float offsetX = (left / clientW) - 0.5f;
-        float offsetY = 0.5f - (bottom / clientH);
-        float scaleX = scale;
-        float scaleY = scale;
-#endif
-
+        float scaleX = reqW / imageW;
+        float scaleY = reqH / imageH;
         ConstantBuffer cb;
         cb.transform = XMMatrixIdentity();
-        // cb.transform *= XMMatrixTranslation(offsetX / scaleX, offsetY / scaleY, 0.0f);
-        // cb.transform *= XMMatrixScaling(2.0f * scaleX, 2.0f * scaleY, 1.0f);
+        cb.transform *= XMMatrixScaling(imageW * scaleX, imageH * scaleY, 1.0f);
+        cb.transform *= XMMatrixTranslation(posX, posY, 0.0f);
+        cb.transform *= XMMatrixOrthographicOffCenterRH(0.0f, clientW, clientH, 0.0f, -1.0f, 1.0f);
         cb.params = XMFLOAT4(
             1.0f, // hdrActive_ ? 1.0f : 0.0f,
             0.0f, // forceSDR_ ? 1.0f : 0.0f,
