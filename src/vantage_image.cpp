@@ -17,7 +17,7 @@ void Vantage::unloadImage(bool unloadColoristImage)
         image_->Release();
         image_ = nullptr;
     }
-    hdrImage_ = false;
+    imageHDR_ = false;
 
     if (unloadColoristImage && coloristImage_) {
         clImageDestroy(coloristContext_, coloristImage_);
@@ -135,28 +135,44 @@ void Vantage::prepareImage()
     unloadImage(false);
 
     if (coloristImage_) {
+        unsigned int sdrWhite = sdrWhiteLevel();
         clProfilePrimaries primaries;
         clProfileCurve curve;
-        int maxLuminance;
 
+        bool defaultSrcLuminance = false;
+        int srcLuminance = 0;
+        clProfileQuery(coloristContext_, coloristImage_->profile, NULL, NULL, &srcLuminance);
+        if (srcLuminance == 0) {
+            defaultSrcLuminance = true;
+            clProfileSetLuminance(coloristContext_, coloristImage_->profile, sdrWhite);
+        }
+
+        int dstLuminance = 10000;
         if (hdrActive_) {
             clContextGetStockPrimaries(coloristContext_, "bt2020", &primaries);
             curve.type = CL_PCT_PQ;
             curve.implicitScale = 1.0f;
             curve.gamma = 1.0f;
-            maxLuminance = 10000;
-            hdrImage_ = true;
+            dstLuminance = 10000;
+            imageWhiteLevel_ = sdrWhite;
+            imageHDR_ = true;
         } else {
             clContextGetStockPrimaries(coloristContext_, "bt709", &primaries);
             curve.type = CL_PCT_GAMMA;
             curve.implicitScale = 1.0f;
             curve.gamma = 2.2f;
-            maxLuminance = 100;
-            hdrImage_ = false;
+            dstLuminance = sdrWhite;
+            imageWhiteLevel_ = sdrWhite;
+            imageHDR_ = false;
         }
-        clProfile * profile = clProfileCreate(coloristContext_, &primaries, &curve, maxLuminance, NULL);
+        clProfile * profile = clProfileCreate(coloristContext_, &primaries, &curve, dstLuminance, NULL);
         clImage * convertedImage = clImageConvert(coloristContext_, coloristImage_, coloristContext_->params.jobs, 16, profile, CL_TONEMAP_AUTO);
         clProfileDestroy(coloristContext_, profile);
+
+        if (defaultSrcLuminance) {
+            // Set it back so we remember to use new SDR values in the future
+            clProfileSetLuminance(coloristContext_, coloristImage_->profile, 0);
+        }
 
         D3D11_TEXTURE2D_DESC desc;
         ZeroMemory(&desc, sizeof(desc));
@@ -376,12 +392,46 @@ void Vantage::clampImagePos()
     }
 }
 
+// SMPTE ST.2084: https://ieeexplore.ieee.org/servlet/opac?punumber=7291450
+
+static const float PQ_C1 = 0.8359375;       // 3424.0 / 4096.0
+static const float PQ_C2 = 18.8515625;      // 2413.0 / 4096.0 * 32.0
+static const float PQ_C3 = 18.6875;         // 2392.0 / 4096.0 * 32.0
+static const float PQ_M1 = 0.1593017578125; // 2610.0 / 4096.0 / 4.0
+static const float PQ_M2 = 78.84375;        // 2523.0 / 4096.0 * 128.0
+
+#if 0
+// SMPTE ST.2084: Equation 4.1
+// L = ( (max(N^(1/m2) - c1, 0)) / (c2 - c3*N^(1/m2)) )^(1/m1)
+static float PQ_EOTF(float N)
+{
+    float N1m2 = powf(N, 1 / PQ_M2);
+    float N1m2c1 = N1m2 - PQ_C1;
+    if (N1m2c1 < 0.0f)
+        N1m2c1 = 0.0f;
+    float c2c3N1m2 = PQ_C2 - (PQ_C3 * N1m2);
+    return powf(N1m2c1 / c2c3N1m2, 1 / PQ_M1);
+}
+#endif
+
+// SMPTE ST.2084: Equation 5.2
+// N = ( (c1 + (c2 * L^m1)) / (1 + (c3 * L^m1)) )^m2
+static float PQ_OETF(float L)
+{
+    float Lm1 = powf(L, PQ_M1);
+    float c2Lm1 = PQ_C2 * Lm1;
+    float c3Lm1 = PQ_C3 * Lm1;
+    return powf((PQ_C1 + c2Lm1) / (1 + c3Lm1), PQ_M2);
+}
+
 void Vantage::render()
 {
+    unsigned int sdrWhite = sdrWhiteLevel();
+
     context_->OMSetRenderTargets(1, &renderTarget_, nullptr);
     context_->ClearRenderTargetView(renderTarget_, backgroundColor);
 
-    if (image_ && (hdrActive_ != hdrImage_)) {
+    if (image_ && ((hdrActive_ != imageHDR_) || (imageWhiteLevel_ != sdrWhite))) {
         prepareImage();
     }
 
@@ -424,25 +474,34 @@ void Vantage::render()
         context_->DrawIndexed(6, 0, 0);
     }
 
+    static const unsigned int overlayDuration = 5000;
+    static const unsigned int overlayFade = 1000;
     DWORD now = GetTickCount();
     DWORD dt = now - overlayTick_;
-    if (!overlay_.empty() && (dt < 3000)) {
+    if (!overlay_.empty() && (dt < overlayDuration)) {
         beginText();
 
         int i = 0;
-        float alpha = 1.0f;
-        if (dt > 2000) {
-            alpha = (1000 - (dt - 2000)) / 1000.0f;
+        float lum = 1.0f;
+        if (dt > (overlayDuration - overlayFade)) {
+            lum = (overlayFade - (dt - (overlayDuration - overlayFade))) / 1000.0f;
+        }
+
+        if (hdrActive_) {
+            // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
+            lum = powf(lum, 2.2f);
+            lum *= (float)sdrWhiteLevel() / 10000.0f;
+            lum = PQ_OETF(lum);
         }
 
         if (coloristImage_ && (imageInfoX_ != -1) && (imageInfoY_ != -1)) {
             char buffer[128];
             sprintf(buffer, "RAW (%d,%d): (%d,%d,%d,%d)", imageInfoX_, imageInfoY_, (int)pixelInfo_.rawR, (int)pixelInfo_.rawG, (int)pixelInfo_.rawB, (int)pixelInfo_.rawA);
-            drawText(buffer, 10, clientH - 20.0f, alpha, alpha, alpha, alpha);
+            drawText(buffer, 10, clientH - 20.0f, lum, lum, lum, lum);
         }
 
         for (auto it = overlay_.begin(); it != overlay_.end(); ++it, ++i) {
-            drawText(it->c_str(), 10, 10.0f + (i * 20.0f), alpha, alpha, alpha, alpha);
+            drawText(it->c_str(), 10, 10.0f + (i * 20.0f), lum, lum, lum, lum);
         }
 
         endText();

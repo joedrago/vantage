@@ -84,6 +84,8 @@ protected:
     void calcCenteredImagePos(float & posX, float & posY);
     void clampImagePos();
 
+    unsigned int sdrWhiteLevel();
+
 protected:
     HINSTANCE hInstance_;
     HWND hwnd_;
@@ -91,7 +93,8 @@ protected:
 
     bool fullscreen_;
     bool hdrActive_;
-    bool hdrImage_;
+    bool imageHDR_;
+    unsigned int imageWhiteLevel_;
     clContext * coloristContext_;
     clImage * coloristImage_;
 

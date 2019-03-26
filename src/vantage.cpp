@@ -4,7 +4,8 @@ Vantage::Vantage(HINSTANCE hInstance)
     : hInstance_(hInstance)
     , fullscreen_(false)
     , hdrActive_(false)
-    , hdrImage_(false)
+    , imageHDR_(false)
+    , imageWhiteLevel_(0)
     , dragging_(false)
     , coloristContext_(nullptr)
     , coloristImage_(nullptr)
@@ -38,6 +39,7 @@ Vantage::Vantage(HINSTANCE hInstance)
     windowPos_.h = 720;
 
     coloristContext_ = clContextCreate(nullptr);
+    coloristContext_->defaultLuminance = 0; // Sentinel value so we can tell if we load an image without a white level set
 }
 
 Vantage::~Vantage()

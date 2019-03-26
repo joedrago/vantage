@@ -7,14 +7,86 @@
 #include <locale>
 #include <codecvt>
 
+static bool GetPathInfo(HMONITOR monitor, DISPLAYCONFIG_PATH_INFO * path_info)
+{
+    LONG result;
+    uint32_t num_path_array_elements = 0;
+    uint32_t num_mode_info_array_elements = 0;
+    std::vector<DISPLAYCONFIG_PATH_INFO> path_infos;
+    std::vector<DISPLAYCONFIG_MODE_INFO> mode_infos;
+
+    // Get the monitor name.
+    MONITORINFOEXW view_info;
+    view_info.cbSize = sizeof(view_info);
+    if (!GetMonitorInfoW(monitor, &view_info))
+        return false;
+
+    // Get all path infos.
+    do {
+        if (GetDisplayConfigBufferSizes(
+                QDC_ONLY_ACTIVE_PATHS, &num_path_array_elements,
+                &num_mode_info_array_elements) != ERROR_SUCCESS)
+        {
+            return false;
+        }
+        path_infos.resize(num_path_array_elements);
+        mode_infos.resize(num_mode_info_array_elements);
+        result = QueryDisplayConfig(
+            QDC_ONLY_ACTIVE_PATHS, &num_path_array_elements, path_infos.data(),
+            &num_mode_info_array_elements, mode_infos.data(), nullptr);
+    } while (result == ERROR_INSUFFICIENT_BUFFER);
+
+    // Iterate of the path infos and see if we find one with a matching name.
+    if (result == ERROR_SUCCESS) {
+        for (uint32_t p = 0; p < num_path_array_elements; p++) {
+            DISPLAYCONFIG_SOURCE_DEVICE_NAME device_name;
+            device_name.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+            device_name.header.size = sizeof(device_name);
+            device_name.header.adapterId = path_infos[p].sourceInfo.adapterId;
+            device_name.header.id = path_infos[p].sourceInfo.id;
+            if (DisplayConfigGetDeviceInfo(&device_name.header) == ERROR_SUCCESS) {
+                if (wcscmp(view_info.szDevice, device_name.viewGdiDeviceName) == 0) {
+                    *path_info = path_infos[p];
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+static unsigned int GetMonitorSDRWhiteLevel(HMONITOR monitor)
+{
+    unsigned int ret = 80;
+    DISPLAYCONFIG_PATH_INFO path_info = {};
+    if (!GetPathInfo(monitor, &path_info))
+        return ret;
+
+    DISPLAYCONFIG_SDR_WHITE_LEVEL white_level = {};
+    white_level.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+    white_level.header.size = sizeof(white_level);
+    white_level.header.adapterId = path_info.targetInfo.adapterId;
+    white_level.header.id = path_info.targetInfo.id;
+    if (DisplayConfigGetDeviceInfo(&white_level.header) != ERROR_SUCCESS)
+        return ret;
+    ret = (unsigned int)white_level.SDRWhiteLevel * 80 / 1000;
+    return ret;
+}
+
+unsigned int Vantage::sdrWhiteLevel()
+{
+    HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+    return GetMonitorSDRWhiteLevel(monitor);
+}
+
 HRESULT Vantage::createDevice()
 {
     HRESULT hr = S_OK;
 
     RECT rc;
     GetClientRect(hwnd_, &rc);
-    UINT width = 3840;  //rc.right - rc.left;
-    UINT height = 2160; //rc.bottom - rc.top;
+    UINT width = rc.right - rc.left;
+    UINT height = rc.bottom - rc.top;
 
     UINT createDeviceFlags = 0;
 #ifdef _DEBUG
