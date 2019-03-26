@@ -133,6 +133,7 @@ void Vantage::loadImage(int offset)
 void Vantage::prepareImage()
 {
     unloadImage(false);
+    kickOverlay();
 
     if (coloristImage_) {
         unsigned int sdrWhite = sdrWhiteLevel();
@@ -494,8 +495,11 @@ void Vantage::render()
             lum = PQ_OETF(lum);
         }
 
+        char buffer[128];
+        sprintf(buffer, "SDR: %d nits", sdrWhiteLevel());
+        drawText(buffer, 10, clientH - 40.0f, lum, lum, lum, lum);
+
         if (coloristImage_ && (imageInfoX_ != -1) && (imageInfoY_ != -1)) {
-            char buffer[128];
             sprintf(buffer, "RAW (%d,%d): (%d,%d,%d,%d)", imageInfoX_, imageInfoY_, (int)pixelInfo_.rawR, (int)pixelInfo_.rawG, (int)pixelInfo_.rawB, (int)pixelInfo_.rawA);
             drawText(buffer, 10, clientH - 20.0f, lum, lum, lum, lum);
         }

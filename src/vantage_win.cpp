@@ -1,4 +1,5 @@
 #include "vantage.h"
+#include "resource.h"
 
 #include <windowsx.h>
 
@@ -16,7 +17,7 @@ bool Vantage::createWindow() //(HINSTANCE hInstance, LPWSTR lpCmdLine, int nCmdS
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
     wcex.hInstance = hInstance_;
-    wcex.hIcon = LoadIcon(hInstance_, (LPCTSTR)IDI_APPLICATION);
+    wcex.hIcon = LoadIcon(hInstance_, (LPCTSTR)IDI_VANTAGE);
     wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground = (HBRUSH)( COLOR_WINDOW + 1 );
     wcex.lpszMenuName = nullptr;
@@ -33,8 +34,20 @@ bool Vantage::createWindow() //(HINSTANCE hInstance, LPWSTR lpCmdLine, int nCmdS
     ShowWindow(hwnd_, SW_SHOW);
     updateWindowPos();
 
+    menu_ = LoadMenu(hInstance_, MAKEINTRESOURCE(IDC_VANTAGE));
+    setMenuVisible(true);
+
     DragAcceptFiles(hwnd_, TRUE);
     return true;
+}
+
+void Vantage::setMenuVisible(bool visible)
+{
+    HMENU menu = NULL;
+    if (visible) {
+        menu = menu_;
+    }
+    SetMenu(hwnd_, menu);
 }
 
 void Vantage::updateWindowPos()
@@ -56,6 +69,7 @@ void Vantage::onToggleFullscreen()
 {
     fullscreen_ = !fullscreen_;
     updateWindowPos();
+    setMenuVisible(!fullscreen_);
 }
 
 void Vantage::onWindowPosChanged(int x, int y, int w, int h)
@@ -69,6 +83,29 @@ void Vantage::onWindowPosChanged(int x, int y, int w, int h)
 
     resizeSwapChain();
     checkHDR();
+}
+
+void Vantage::onFileOpen()
+{
+    char filename[MAX_PATH];
+
+    OPENFILENAME ofn;
+    ZeroMemory(&ofn, sizeof(OPENFILENAME));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd_;
+    ofn.lpstrFile = filename;
+    ofn.lpstrFile[0] = '\0';
+    ofn.nMaxFile = sizeof(filename);
+    ofn.lpstrFilter = "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jp2, *.j2k, *.png, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jp2;*.j2k;*.png;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    if (GetOpenFileName(&ofn)) {
+        loadImage(filename);
+    }
 }
 
 void Vantage::loop()
@@ -108,6 +145,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     if (v)
                         v->onToggleFullscreen();
                     break;
+                case 111: // O
+                    if (v)
+                        v->onFileOpen();
+                    break;
                 case 113: // Q
                     PostQuitMessage(0);
                     break;
@@ -140,9 +181,37 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     if (v)
                         v->loadImage(1);
                     break;
+                case VK_F11:
+                    if (v)
+                        v->onToggleFullscreen();
+                    break;
             }
             break;
         }
+
+        case WM_COMMAND:
+            switch (LOWORD(wParam)) {
+                case IDM_EXIT:
+                    PostQuitMessage(0);
+                    break;
+                case ID_VIEW_FULLSCREEN:
+                    if (v)
+                        v->onToggleFullscreen();
+                    break;
+                case ID_FILE_OPEN:
+                    if (v)
+                        v->onFileOpen();
+                    break;
+                case ID_VIEW_PREVIOUSIMAGE:
+                    if (v)
+                        v->loadImage(-1);
+                    break;
+                case ID_VIEW_NEXTIMAGE:
+                    if (v)
+                        v->loadImage(1);
+                    break;
+            }
+            break;
 
         case WM_LBUTTONDOWN:
             if (v) {

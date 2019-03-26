@@ -51,6 +51,7 @@ public:
     // Event handlers
     void onToggleFullscreen();
     void onWindowPosChanged(int x, int y, int w, int h);
+    void onFileOpen();
     void loadImage(const char * filename);
     void loadImage(int offset);
     void unloadImage(bool unloadColoristImage = true);
@@ -77,6 +78,8 @@ protected:
     void drawText(const char * text, float x, float y, float r, float g, float b, float a);
     void endText();
 
+    void setMenuVisible(bool visible);
+
     void clearOverlay();
     void appendOverlay(const char * format, ...);
 
@@ -90,6 +93,7 @@ protected:
     HINSTANCE hInstance_;
     HWND hwnd_;
     WindowPosition windowPos_;
+    HMENU menu_;
 
     bool fullscreen_;
     bool hdrActive_;
