@@ -44,7 +44,7 @@ public:
     Vantage(HINSTANCE hInstance);
     ~Vantage();
 
-    bool init();
+    bool init(const char * initialFilename);
     void loop();
     void cleanup();
 

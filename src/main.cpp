@@ -5,13 +5,20 @@
 
 #include "vantage.h"
 
+#include <locale>
+#include <codecvt>
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
+    std::wstring cmdLine = lpCmdLine;
+    std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
+    std::string output = converter.to_bytes(cmdLine);
+
     Vantage vantage(hInstance);
-    if (!vantage.init()) {
+    if (!vantage.init(output.c_str())) {
         return -1;
     }
 

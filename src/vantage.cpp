@@ -53,7 +53,7 @@ void Vantage::cleanup()
     destroyDevice();
 }
 
-bool Vantage::init()
+bool Vantage::init(const char * filename)
 {
     if (!createWindow()) {
         return false;
@@ -63,8 +63,9 @@ bool Vantage::init()
     }
     checkHDR();
 
-    // DEBUG, REMOVE ME
-    // loadImage("C:\\Users\\joe\\Desktop\\dump_000.bmp");
+    if (filename && filename[0]) {
+        loadImage(filename);
+    }
 
     return true;
 }
