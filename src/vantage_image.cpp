@@ -140,13 +140,7 @@ void Vantage::prepareImage()
         clProfilePrimaries primaries;
         clProfileCurve curve;
 
-        bool defaultSrcLuminance = false;
-        int srcLuminance = 0;
-        clProfileQuery(coloristContext_, coloristImage_->profile, NULL, NULL, &srcLuminance);
-        if (srcLuminance == 0) {
-            defaultSrcLuminance = true;
-            clProfileSetLuminance(coloristContext_, coloristImage_->profile, sdrWhite);
-        }
+        coloristContext_->defaultLuminance = sdrWhite;
 
         int dstLuminance = 10000;
         if (hdrActive_) {
@@ -169,11 +163,6 @@ void Vantage::prepareImage()
         clProfile * profile = clProfileCreate(coloristContext_, &primaries, &curve, dstLuminance, NULL);
         clImage * convertedImage = clImageConvert(coloristContext_, coloristImage_, coloristContext_->params.jobs, 16, profile, CL_TONEMAP_AUTO);
         clProfileDestroy(coloristContext_, profile);
-
-        if (defaultSrcLuminance) {
-            // Set it back so we remember to use new SDR values in the future
-            clProfileSetLuminance(coloristContext_, coloristImage_->profile, 0);
-        }
 
         D3D11_TEXTURE2D_DESC desc;
         ZeroMemory(&desc, sizeof(desc));
@@ -425,6 +414,10 @@ static float PQ_OETF(float L)
     return powf((PQ_C1 + c2Lm1) / (1 + c3Lm1), PQ_M2);
 }
 
+extern "C" {
+int clTransformCalcHLGLuminance(int diffuseWhite);
+}
+
 void Vantage::render()
 {
     unsigned int sdrWhite = sdrWhiteLevel();
@@ -440,6 +433,7 @@ void Vantage::render()
     GetClientRect(hwnd_, &clientRect);
     float clientW = (float)clientRect.right;
     float clientH = (float)clientRect.bottom;
+    bool showHLG = false;
 
     if (coloristImage_ && image_ && (clientW > 0.0f) && (clientH > 0.0f)) {
         float imageW = (float)coloristImage_->width;
@@ -473,6 +467,12 @@ void Vantage::render()
         context_->PSSetShaderResources(0, 1, &image_);
         context_->PSSetSamplers(0, 1, &sampler_);
         context_->DrawIndexed(6, 0, 0);
+
+        clProfileCurve curve;
+        clProfileQuery(coloristContext_, coloristImage_->profile, NULL, &curve, NULL);
+        if (curve.type == CL_PCT_HLG) {
+            showHLG = true;
+        }
     }
 
     static const unsigned int overlayDuration = 5000;
@@ -495,8 +495,13 @@ void Vantage::render()
             lum = PQ_OETF(lum);
         }
 
-        char buffer[128];
-        sprintf(buffer, "SDR: %d nits", sdrWhiteLevel());
+        char buffer[1024];
+        int sdrWhite = sdrWhiteLevel();
+        if (showHLG) {
+            sprintf(buffer, "SDR: %d nits, peak: %d nits", sdrWhite, clTransformCalcHLGLuminance(sdrWhite));
+        } else {
+            sprintf(buffer, "SDR: %d nits", sdrWhite);
+        }
         drawText(buffer, 10, clientH - 40.0f, lum, lum, lum, lum);
 
         if (coloristImage_ && (imageInfoX_ != -1) && (imageInfoY_ != -1)) {
