@@ -6,9 +6,14 @@ Vantage::Vantage(HINSTANCE hInstance)
     , hdrActive_(false)
     , imageHDR_(false)
     , imageWhiteLevel_(0)
+    , diffThreshold_(0)
+    , diffMode_(DIFFMODE_SHOWDIFF)
+    , diffIntensity_(DIFFINTENSITY_BRIGHT)
     , dragging_(false)
     , coloristContext_(nullptr)
     , coloristImage_(nullptr)
+    , coloristImage2_(nullptr)
+    , coloristImageDiff_(nullptr)
     , overlayTick_(0)
     , imageInfoX_(-1)
     , imageInfoY_(-1)
@@ -39,7 +44,6 @@ Vantage::Vantage(HINSTANCE hInstance)
     windowPos_.h = 720;
 
     coloristContext_ = clContextCreate(nullptr);
-    coloristContext_->defaultLuminance = 0; // Sentinel value so we can tell if we load an image without a white level set
 }
 
 Vantage::~Vantage()
@@ -53,7 +57,7 @@ void Vantage::cleanup()
     destroyDevice();
 }
 
-bool Vantage::init(const char * filename)
+bool Vantage::init(const char * filename1, const char * filename2)
 {
     if (!createWindow()) {
         return false;
@@ -63,8 +67,10 @@ bool Vantage::init(const char * filename)
     }
     checkHDR();
 
-    if (filename && filename[0]) {
-        loadImage(filename);
+    if (filename1[0] && filename2[0]) {
+        loadDiff(filename1, filename2);
+    } else if (filename1[0]) {
+        loadImage(filename1);
     }
 
     return true;

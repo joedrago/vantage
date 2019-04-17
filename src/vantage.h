@@ -38,13 +38,27 @@ struct WindowPosition
     int h;
 };
 
+enum DiffMode
+{
+    DIFFMODE_SHOW1 = 0,
+    DIFFMODE_SHOW2,
+    DIFFMODE_SHOWDIFF
+};
+
+enum DiffIntensity
+{
+    DIFFINTENSITY_ORIGINAL = 0,
+    DIFFINTENSITY_BRIGHT,
+    DIFFINTENSITY_DIFFONLY
+};
+
 class Vantage
 {
 public:
     Vantage(HINSTANCE hInstance);
     ~Vantage();
 
-    bool init(const char * initialFilename);
+    bool init(const char * initialFilename1, const char * initialFilename2);
     void loop();
     void cleanup();
 
@@ -52,7 +66,9 @@ public:
     void onToggleFullscreen();
     void onWindowPosChanged(int x, int y, int w, int h);
     void onFileOpen();
+    void onDiffCurrentImage();
     void loadImage(const char * filename);
+    void loadDiff(const char * filename1, const char * filename2 = "");
     void loadImage(int offset);
     void unloadImage(bool unloadColoristImage = true);
     void kickOverlay();
@@ -64,6 +80,9 @@ public:
     void mouseMove(int x, int y);
     void mouseWheel(int x, int y, int delta);
     void mouseSetPos(int x, int y);
+    void adjustThreshold(int amount);
+    void setDiffMode(DiffMode diffMode);
+    void setDiffIntensity(DiffIntensity diffIntensity);
 
 protected:
     bool createWindow();
@@ -75,7 +94,7 @@ protected:
     void checkHDR(); // updates hdrActive_
     void prepareImage();
     void beginText();
-    void drawText(const char * text, float x, float y, float r, float g, float b, float a);
+    void drawText(const char * text, float x, float y, float lum, float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f);
     void endText();
 
     void setMenuVisible(bool visible);
@@ -99,8 +118,13 @@ protected:
     bool hdrActive_;
     bool imageHDR_;
     unsigned int imageWhiteLevel_;
+    int diffThreshold_;
+    DiffMode diffMode_;
+    DiffIntensity diffIntensity_;
     clContext * coloristContext_;
     clImage * coloristImage_;
+    clImage * coloristImage2_;
+    clImageDiff * coloristImageDiff_;
 
     // D3D
     D3D_DRIVER_TYPE driverType_;

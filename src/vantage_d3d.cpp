@@ -490,19 +490,19 @@ void Vantage::beginText()
     spriteBatch_->Begin();
 }
 
-void Vantage::drawText(const char * text, float x, float y, float r, float g, float b, float a)
+void Vantage::drawText(const char * text, float x, float y, float lum, float r, float g, float b, float a)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
     std::wstring output = converter.from_bytes(text);
 
     const float shadowOffset = 2.0f;
 
-    XMVECTORF32 shadowColor = { { { 0, 0, 0, a } } };
+    XMVECTORF32 shadowColor = { { { 0, 0, 0, a * lum } } };
     XMFLOAT2 shadowPos;
     shadowPos.x = x + shadowOffset;
     shadowPos.y = y + shadowOffset;
 
-    XMVECTORF32 fontColor = { { { r, g, b, a } } };
+    XMVECTORF32 fontColor = { { { r * lum, g * lum, b * lum, a * lum } } };
     XMFLOAT2 fontPos;
     fontPos.x = x;
     fontPos.y = y;

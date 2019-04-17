@@ -19,9 +19,19 @@ void Vantage::unloadImage(bool unloadColoristImage)
     }
     imageHDR_ = false;
 
-    if (unloadColoristImage && coloristImage_) {
-        clImageDestroy(coloristContext_, coloristImage_);
-        coloristImage_ = nullptr;
+    if (unloadColoristImage) {
+        if (coloristImage_) {
+            clImageDestroy(coloristContext_, coloristImage_);
+            coloristImage_ = nullptr;
+        }
+        if (coloristImage2_) {
+            clImageDestroy(coloristContext_, coloristImage2_);
+            coloristImage2_ = nullptr;
+        }
+        if (coloristImageDiff_) {
+            clImageDiffDestroy(coloristContext_, coloristImageDiff_);
+            coloristImageDiff_ = nullptr;
+        }
     }
 
     imageInfoX_ = -1;
@@ -98,13 +108,67 @@ void Vantage::loadImage(const char * filename)
     loadImage(0);
 }
 
-void Vantage::loadImage(int offset)
+void Vantage::loadDiff(const char * filename1, const char * filename2)
 {
     unloadImage();
 
+    const char * fn1 = nullptr;
+    const char * fn2 = nullptr;
+
+    if (filename1[0] && filename2[0]) {
+        // Throw everything away and load these two images
+        fn1 = filename1;
+        fn2 = filename2;
+    } else if (!imageFiles_.empty() && filename1[0]) {
+        // Reload the "current" image and diff against this filename
+        fn1 = imageFiles_[imageFileIndex_].c_str();
+        fn2 = filename1;
+    }
+
+    clearOverlay();
+
+    const char * failureReason = nullptr;
+    coloristImage_ = clContextRead(coloristContext_, fn1, nullptr, nullptr);
+    coloristImage2_ = clContextRead(coloristContext_, fn2, nullptr, nullptr);
+    if (!coloristImage_ || !coloristImage2_) {
+        failureReason = "Both failed to load";
+    } else if (!coloristImage_) {
+        failureReason = "First failed to load";
+    } else if (!coloristImage2_) {
+        failureReason = "Second failed to load";
+    } else if ((coloristImage_->width != coloristImage2_->width) || (coloristImage_->height != coloristImage2_->height)) {
+        failureReason = "Dimensions mismatch";
+    }
+
+    if (failureReason) {
+        unloadImage();
+        appendOverlay("Failed to load diff (%s):", failureReason);
+        appendOverlay("* %s", fn1);
+        appendOverlay("* %s", fn2);
+        imageFiles_.clear();
+        return;
+    }
+
+    appendOverlay("Loaded diff:");
+    appendOverlay("* %s", fn1);
+    appendOverlay("* %s", fn2);
+
+    diffMode_ = DIFFMODE_SHOWDIFF;
+    diffIntensity_ = DIFFINTENSITY_BRIGHT;
+    imageFiles_.clear();
+    prepareImage();
+    resetImagePos();
+    render();
+}
+
+void Vantage::loadImage(int offset)
+{
     if (imageFiles_.empty()) {
         return;
     }
+
+    unloadImage();
+
     int loadIndex = imageFileIndex_ + offset;
     if (loadIndex < 0) {
         loadIndex = (int)imageFiles_.size() - 1;
@@ -116,10 +180,9 @@ void Vantage::loadImage(int offset)
 
     const char * filename = imageFiles_[imageFileIndex_].c_str();
     coloristImage_ = clContextRead(coloristContext_, filename, nullptr, nullptr);
+
     prepareImage();
-
     resetImagePos();
-
     clearOverlay();
     if (coloristImage_) {
         appendOverlay("[%d/%d] Loaded: %s", imageFileIndex_ + 1, imageFiles_.size(), filename);
@@ -135,12 +198,62 @@ void Vantage::prepareImage()
     unloadImage(false);
     kickOverlay();
 
-    if (coloristImage_) {
-        unsigned int sdrWhite = sdrWhiteLevel();
+    clImage * srcImage = nullptr;
+
+    unsigned int sdrWhite = sdrWhiteLevel();
+    coloristContext_->defaultLuminance = sdrWhite;
+
+    if (coloristImage_ && coloristImage2_) {
+        if (!clProfileMatches(coloristContext_, coloristImage_->profile, coloristImage2_->profile) || (coloristImage_->depth != coloristImage2_->depth)) {
+            clImage * converted = clImageConvert(coloristContext_, coloristImage2_, coloristContext_->params.jobs, coloristImage_->depth, coloristImage_->profile, CL_TONEMAP_OFF);
+            clImageDestroy(coloristContext_, coloristImage2_);
+            coloristImage2_ = converted;
+
+            if (coloristImageDiff_) {
+                clImageDiffDestroy(coloristContext_, coloristImageDiff_);
+                coloristImageDiff_ = nullptr;
+            }
+        }
+
+        if (coloristImageDiff_) {
+            clImageDiffUpdate(coloristContext_, coloristImageDiff_, diffThreshold_);
+        } else {
+            float minIntensity = 0.0f;
+            switch (diffIntensity_) {
+                case DIFFINTENSITY_ORIGINAL:
+                    minIntensity = 0.0f;
+                    break;
+                case DIFFINTENSITY_BRIGHT:
+                    minIntensity = 0.1f;
+                    break;
+                case DIFFINTENSITY_DIFFONLY:
+                    minIntensity = 1.0f;
+                    break;
+            }
+
+            coloristImageDiff_ = clImageDiffCreate(coloristContext_, coloristImage_, coloristImage2_, coloristContext_->params.jobs, minIntensity, diffThreshold_);
+        }
+
+        switch (diffMode_) {
+            case DIFFMODE_SHOW1:
+                srcImage = coloristImage_;
+                break;
+            case DIFFMODE_SHOW2:
+                srcImage = coloristImage2_;
+                break;
+            case DIFFMODE_SHOWDIFF:
+                srcImage = coloristImageDiff_->image;
+                break;
+        }
+
+    } else {
+        // Just show an image like normal
+        srcImage = coloristImage_;
+    }
+
+    if (srcImage) {
         clProfilePrimaries primaries;
         clProfileCurve curve;
-
-        coloristContext_->defaultLuminance = sdrWhite;
 
         int dstLuminance = 10000;
         if (hdrActive_) {
@@ -161,7 +274,7 @@ void Vantage::prepareImage()
             imageHDR_ = false;
         }
         clProfile * profile = clProfileCreate(coloristContext_, &primaries, &curve, dstLuminance, NULL);
-        clImage * convertedImage = clImageConvert(coloristContext_, coloristImage_, coloristContext_->params.jobs, 16, profile, CL_TONEMAP_AUTO);
+        clImage * convertedImage = clImageConvert(coloristContext_, srcImage, coloristContext_->params.jobs, 16, profile, CL_TONEMAP_AUTO);
         clProfileDestroy(coloristContext_, profile);
 
         D3D11_TEXTURE2D_DESC desc;
@@ -382,6 +495,41 @@ void Vantage::clampImagePos()
     }
 }
 
+void Vantage::adjustThreshold(int amount)
+{
+    int newThreshold = diffThreshold_ + amount;
+    if (newThreshold < 0) {
+        newThreshold = 0;
+    }
+    if (diffThreshold_ != newThreshold) {
+        diffThreshold_ = newThreshold;
+        prepareImage();
+        render();
+    }
+}
+
+void Vantage::setDiffMode(DiffMode diffMode)
+{
+    if (diffMode_ != diffMode) {
+        diffMode_ = diffMode;
+        prepareImage();
+        render();
+    }
+}
+
+void Vantage::setDiffIntensity(DiffIntensity diffIntensity)
+{
+    if (diffIntensity_ != diffIntensity) {
+        diffIntensity_ = diffIntensity;
+        if (coloristImageDiff_) {
+            clImageDiffDestroy(coloristContext_, coloristImageDiff_);
+            coloristImageDiff_ = nullptr;
+        }
+        prepareImage();
+        render();
+    }
+}
+
 // SMPTE ST.2084: https://ieeexplore.ieee.org/servlet/opac?punumber=7291450
 
 static const float PQ_C1 = 0.8359375;       // 3424.0 / 4096.0
@@ -475,7 +623,7 @@ void Vantage::render()
         }
     }
 
-    static const unsigned int overlayDuration = 5000;
+    static const unsigned int overlayDuration = 20000;
     static const unsigned int overlayFade = 1000;
     DWORD now = GetTickCount();
     DWORD dt = now - overlayTick_;
@@ -502,15 +650,49 @@ void Vantage::render()
         } else {
             sprintf(buffer, "SDR: %d nits", sdrWhite);
         }
-        drawText(buffer, 10, clientH - 40.0f, lum, lum, lum, lum);
-
-        if (coloristImage_ && (imageInfoX_ != -1) && (imageInfoY_ != -1)) {
-            sprintf(buffer, "RAW (%d,%d): (%d,%d,%d,%d)", imageInfoX_, imageInfoY_, (int)pixelInfo_.rawR, (int)pixelInfo_.rawG, (int)pixelInfo_.rawB, (int)pixelInfo_.rawA);
-            drawText(buffer, 10, clientH - 20.0f, lum, lum, lum, lum);
-        }
+        drawText(buffer, 10, clientH - 40.0f, lum);
 
         for (auto it = overlay_.begin(); it != overlay_.end(); ++it, ++i) {
-            drawText(it->c_str(), 10, 10.0f + (i * 20.0f), lum, lum, lum, lum);
+            drawText(it->c_str(), 10, 10.0f + (i * 20.0f), lum);
+        }
+
+        if (coloristImageDiff_) {
+            float left = clientW - 500.0f;
+            float top = 20.0f;
+            float nextLine = 20.0f;
+
+            sprintf(buffer, "Threshold        : %d", diffThreshold_);
+            drawText(buffer, left, top, lum);
+            top += nextLine;
+
+            sprintf(buffer, "Largest Chan Diff: %d", coloristImageDiff_->largestChannelDiff);
+            drawText(buffer, left, top, lum);
+            top += nextLine;
+
+            if ((imageInfoX_ != -1) && (imageInfoY_ != -1)) {
+                int diff = coloristImageDiff_->diffs[imageInfoX_ + (imageInfoY_ * coloristImageDiff_->image->width)];
+                sprintf(buffer, "Diff (%4d, %4d): %d", imageInfoX_, imageInfoY_, diff);
+                drawText(buffer, left, top, lum);
+                top += nextLine;
+            }
+
+            top += nextLine; // blank line
+
+            sprintf(buffer, "Perfect Matches  : %7d (%.1f%%)", coloristImageDiff_->matchCount, (100.0f * (float)coloristImageDiff_->matchCount / coloristImageDiff_->pixelCount));
+            drawText(buffer, left, top, lum);
+            top += nextLine;
+
+            sprintf(buffer, "Under Threshold  : %7d (%.1f%%)", coloristImageDiff_->underThresholdCount, (100.0f * (float)coloristImageDiff_->underThresholdCount / coloristImageDiff_->pixelCount));
+            drawText(buffer, left, top, lum);
+            top += nextLine;
+
+            sprintf(buffer, "Over Threshold   : %7d (%.1f%%)", coloristImageDiff_->overThresholdCount, (100.0f * (float)coloristImageDiff_->overThresholdCount / coloristImageDiff_->pixelCount));
+            drawText(buffer, left, top, lum);
+            top += nextLine;
+
+            sprintf(buffer, "Total Pixels     : %7d", coloristImageDiff_->matchCount);
+            drawText(buffer, left, top, lum);
+            top += nextLine;
         }
 
         endText();

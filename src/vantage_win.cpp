@@ -108,6 +108,33 @@ void Vantage::onFileOpen()
     }
 }
 
+void Vantage::onDiffCurrentImage()
+{
+    if (imageFiles_.empty()) {
+        return;
+    }
+
+    char filename[MAX_PATH];
+
+    OPENFILENAME ofn;
+    ZeroMemory(&ofn, sizeof(OPENFILENAME));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd_;
+    ofn.lpstrFile = filename;
+    ofn.lpstrFile[0] = '\0';
+    ofn.nMaxFile = sizeof(filename);
+    ofn.lpstrFilter = "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jp2, *.j2k, *.png, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jp2;*.j2k;*.png;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    if (GetOpenFileName(&ofn)) {
+        loadDiff(filename, "");
+    }
+}
+
 void Vantage::loop()
 {
     MSG msg = { 0 };
@@ -125,6 +152,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 {
     PAINTSTRUCT ps;
     HDC hdc;
+    char filename1[MAX_PATH + 1];
+    char filename2[MAX_PATH + 1];
 
     Vantage * v = (Vantage *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
@@ -133,13 +162,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         {
             unsigned int key = (unsigned int)wParam;
             switch (key) {
-                case 97: // A
+                case 49: // 1
                     if (v)
-                        v->loadImage(-1);
+                        v->setDiffMode(DIFFMODE_SHOW1);
+                    break;
+                case 50: // 2
+                    if (v)
+                        v->setDiffMode(DIFFMODE_SHOW2);
+                    break;
+                case 51: // 3
+                    if (v)
+                        v->setDiffMode(DIFFMODE_SHOWDIFF);
                     break;
                 case 100: // D
                     if (v)
-                        v->loadImage(1);
+                        v->onDiffCurrentImage();
                     break;
                 case 102: // F
                     if (v)
@@ -172,18 +209,60 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     PostQuitMessage(0);
                     break;
                 case VK_LEFT:
-                case VK_UP:
                     if (v)
                         v->loadImage(-1);
                     break;
                 case VK_RIGHT:
-                case VK_DOWN:
                     if (v)
                         v->loadImage(1);
                     break;
                 case VK_F11:
                     if (v)
                         v->onToggleFullscreen();
+                    break;
+                case VK_UP:
+                    if (v)
+                        v->adjustThreshold(1);
+                    break;
+                case VK_DOWN:
+                    if (v)
+                        v->adjustThreshold(-1);
+                    break;
+                case VK_NUMPAD1:
+                    if (v)
+                        v->adjustThreshold(-5);
+                    break;
+                case VK_NUMPAD2:
+                    if (v)
+                        v->adjustThreshold(-50);
+                    break;
+                case VK_NUMPAD3:
+                    if (v)
+                        v->adjustThreshold(-500);
+                    break;
+                case VK_NUMPAD4:
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_ORIGINAL);
+                    break;
+                case VK_NUMPAD5:
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_BRIGHT);
+                    break;
+                case VK_NUMPAD6:
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_DIFFONLY);
+                    break;
+                case VK_NUMPAD7:
+                    if (v)
+                        v->adjustThreshold(5);
+                    break;
+                case VK_NUMPAD8:
+                    if (v)
+                        v->adjustThreshold(50);
+                    break;
+                case VK_NUMPAD9:
+                    if (v)
+                        v->adjustThreshold(500);
                     break;
             }
             break;
@@ -209,6 +288,70 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case ID_VIEW_NEXTIMAGE:
                     if (v)
                         v->loadImage(1);
+                    break;
+                case ID_DIFF_DIFFCURRENTIMAGEAGAINST:
+                    if (v)
+                        v->onDiffCurrentImage();
+                    break;
+
+                case ID_DIFF_SHOWIMAGE1:
+                    if (v)
+                        v->setDiffMode(DIFFMODE_SHOW1);
+                    break;
+                case ID_DIFF_SHOWIMAGE2:
+                    if (v)
+                        v->setDiffMode(DIFFMODE_SHOW2);
+                    break;
+                case ID_DIFF_SHOWDIFF:
+                    if (v)
+                        v->setDiffMode(DIFFMODE_SHOWDIFF);
+                    break;
+
+                case ID_DIFF_DIFFINTENSITY_ORIGINAL:
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_ORIGINAL);
+                    break;
+                case ID_DIFF_DIFFINTENSITY_BRIGHT:
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_BRIGHT);
+                    break;
+                case ID_DIFF_DIFFINTENSITY_DIFFONLY:
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_DIFFONLY);
+                    break;
+
+                case ID_DIFF_ADJUSTTHRESHOLDM1:
+                    if (v)
+                        v->adjustThreshold(-1);
+                    break;
+                case ID_DIFF_ADJUSTTHRESHOLDM5:
+                    if (v)
+                        v->adjustThreshold(-5);
+                    break;
+                case ID_DIFF_ADJUSTTHRESHOLDM50:
+                    if (v)
+                        v->adjustThreshold(-50);
+                    break;
+                case ID_DIFF_ADJUSTTHRESHOLDM500:
+                    if (v)
+                        v->adjustThreshold(-500);
+                    break;
+
+                case ID_DIFF_ADJUSTTHRESHOLD1:
+                    if (v)
+                        v->adjustThreshold(1);
+                    break;
+                case ID_DIFF_ADJUSTTHRESHOLD5:
+                    if (v)
+                        v->adjustThreshold(5);
+                    break;
+                case ID_DIFF_ADJUSTTHRESHOLD50:
+                    if (v)
+                        v->adjustThreshold(50);
+                    break;
+                case ID_DIFF_ADJUSTTHRESHOLD500:
+                    if (v)
+                        v->adjustThreshold(500);
                     break;
             }
             break;
@@ -259,22 +402,35 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
         case WM_MOUSEWHEEL:
             if (v) {
-                int x = GET_X_LPARAM(lParam);
-                int y = GET_Y_LPARAM(lParam);
+                POINT p;
+                p.x = GET_X_LPARAM(lParam);
+                p.y = GET_Y_LPARAM(lParam);
+                ScreenToClient(hwnd, &p);
                 int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-                v->mouseWheel(x, y, delta);
+                v->mouseWheel(p.x, p.y, delta);
             }
             break;
 
         case WM_DROPFILES:
         {
+            filename1[0] = 0;
+            filename2[0] = 0;
+
             HDROP drop = (HDROP)wParam;
-            char filename[MAX_PATH + 1];
-            filename[0] = 0;
-            DragQueryFile(drop, 0, filename, MAX_PATH);
-            DragFinish(drop);
-            if (v && filename[0]) {
-                v->loadImage(filename);
+            int dropCount = DragQueryFile(drop, 0xFFFFFFFF, filename1, MAX_PATH);
+            if (dropCount > 1) {
+                DragQueryFile(drop, 0, filename1, MAX_PATH);
+                DragQueryFile(drop, 1, filename2, MAX_PATH);
+                DragFinish(drop);
+                if (v && filename1[0] && filename2[0]) {
+                    v->loadDiff(filename1, filename2);
+                }
+            } else {
+                DragQueryFile(drop, 0, filename1, MAX_PATH);
+                DragFinish(drop);
+                if (v && filename1[0]) {
+                    v->loadImage(filename1);
+                }
             }
             break;
         }
