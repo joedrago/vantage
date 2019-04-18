@@ -85,6 +85,8 @@ void Vantage::onWindowPosChanged(int x, int y, int w, int h)
     checkHDR();
 }
 
+static const char * imageFileFilter = "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jpeg, *.jp2, *.j2k, *.png, *.tif, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jpeg;*.jp2;*.j2k;*.png;*.tif;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+
 void Vantage::onFileOpen()
 {
     char filename[MAX_PATH];
@@ -96,7 +98,7 @@ void Vantage::onFileOpen()
     ofn.lpstrFile = filename;
     ofn.lpstrFile[0] = '\0';
     ofn.nMaxFile = sizeof(filename);
-    ofn.lpstrFilter = "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jp2, *.j2k, *.png, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jp2;*.j2k;*.png;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFilter = imageFileFilter;
     ofn.nFilterIndex = 1;
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;
@@ -123,7 +125,7 @@ void Vantage::onDiffCurrentImage()
     ofn.lpstrFile = filename;
     ofn.lpstrFile[0] = '\0';
     ofn.nMaxFile = sizeof(filename);
-    ofn.lpstrFilter = "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jp2, *.j2k, *.png, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jp2;*.j2k;*.png;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFilter = imageFileFilter;
     ofn.nFilterIndex = 1;
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;
@@ -194,6 +196,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                         v->resetImagePos();
                     break;
 
+                case 122: // Z
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_ORIGINAL);
+                    break;
+                case 120: // X
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_BRIGHT);
+                    break;
+                case 99: // C
+                    if (v)
+                        v->setDiffIntensity(DIFFINTENSITY_DIFFONLY);
+                    break;
+
                 case 32: // Space
                     if (v)
                         v->kickOverlay();
@@ -220,6 +235,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     if (v)
                         v->onToggleFullscreen();
                     break;
+
                 case VK_UP:
                     if (v)
                         v->adjustThreshold(1);
@@ -228,39 +244,27 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     if (v)
                         v->adjustThreshold(-1);
                     break;
-                case VK_NUMPAD1:
+                case VK_DELETE:
                     if (v)
                         v->adjustThreshold(-5);
                     break;
-                case VK_NUMPAD2:
+                case VK_END:
                     if (v)
                         v->adjustThreshold(-50);
                     break;
-                case VK_NUMPAD3:
+                case VK_NEXT:
                     if (v)
                         v->adjustThreshold(-500);
                     break;
-                case VK_NUMPAD4:
-                    if (v)
-                        v->setDiffIntensity(DIFFINTENSITY_ORIGINAL);
-                    break;
-                case VK_NUMPAD5:
-                    if (v)
-                        v->setDiffIntensity(DIFFINTENSITY_BRIGHT);
-                    break;
-                case VK_NUMPAD6:
-                    if (v)
-                        v->setDiffIntensity(DIFFINTENSITY_DIFFONLY);
-                    break;
-                case VK_NUMPAD7:
+                case VK_INSERT:
                     if (v)
                         v->adjustThreshold(5);
                     break;
-                case VK_NUMPAD8:
+                case VK_HOME:
                     if (v)
                         v->adjustThreshold(50);
                     break;
-                case VK_NUMPAD9:
+                case VK_PRIOR:
                     if (v)
                         v->adjustThreshold(500);
                     break;

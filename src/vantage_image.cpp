@@ -47,9 +47,11 @@ static bool isImageFile(const char * filename)
         if (!strcmp(ext, ".avif")) return true;
         if (!strcmp(ext, ".bmp")) return true;
         if (!strcmp(ext, ".jpg")) return true;
+        if (!strcmp(ext, ".jpeg")) return true;
         if (!strcmp(ext, ".jp2")) return true;
         if (!strcmp(ext, ".j2k")) return true;
         if (!strcmp(ext, ".png")) return true;
+        if (!strcmp(ext, ".tif")) return true;
         if (!strcmp(ext, ".tiff")) return true;
         if (!strcmp(ext, ".webp")) return true;
     }
