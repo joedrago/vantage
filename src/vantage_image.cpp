@@ -631,7 +631,9 @@ void Vantage::updateInfo()
     info_.clear();
 
     if (coloristImage_) {
-        appendInfo("Dimensions     : %dx%d (%d bpc)", coloristImage_->width, coloristImage_->height, coloristImage_->depth);
+        int width = coloristImage_->width;
+        int height = coloristImage_->height;
+        int depth = coloristImage_->depth;
 
         int fileSize = 0;
         if (coloristImageDiff_) {
@@ -641,6 +643,9 @@ void Vantage::updateInfo()
                     break;
                 case DIFFMODE_SHOW2:
                     fileSize = coloristImageFileSize2_;
+                    width = coloristImage2_->width;
+                    height = coloristImage2_->height;
+                    depth = coloristImage2_->depth;
                     break;
                 case DIFFMODE_SHOWDIFF:
                     fileSize = 0;
@@ -649,6 +654,8 @@ void Vantage::updateInfo()
         } else {
             fileSize = coloristImageFileSize_;
         }
+
+        appendInfo("Dimensions     : %dx%d (%d bpc)", width, height, depth);
 
         if (fileSize > 0) {
             if (fileSize > (1024 * 1024)) {
