@@ -5,6 +5,7 @@ Vantage::Vantage(HINSTANCE hInstance)
     , fullscreen_(false)
     , hdrActive_(false)
     , imageHDR_(false)
+    , srgbHighlight_(false)
     , imageWhiteLevel_(0)
     , diffThreshold_(0)
     , diffMode_(DIFFMODE_SHOWDIFF)
@@ -14,6 +15,8 @@ Vantage::Vantage(HINSTANCE hInstance)
     , coloristImage_(nullptr)
     , coloristImage2_(nullptr)
     , coloristImageDiff_(nullptr)
+    , coloristImageHighlight_(nullptr)
+    , coloristHighlightInfo_(nullptr)
     , overlayTick_(0)
     , imageInfoX_(-1)
     , imageInfoY_(-1)
@@ -81,6 +84,13 @@ void Vantage::kickOverlay()
     overlayTick_ = GetTickCount();
 }
 
+void Vantage::killOverlay()
+{
+    overlayTick_ = GetTickCount() - overlayDuration_;
+    imageInfoX_ = -1;
+    imageInfoY_ = -1;
+}
+
 void Vantage::appendOverlay(const char * format, ...)
 {
     const int stackBufferSize = 256;
@@ -112,4 +122,27 @@ void Vantage::appendOverlay(const char * format, ...)
 void Vantage::clearOverlay()
 {
     overlay_.clear();
+}
+
+void Vantage::appendInfo(const char * format, ...)
+{
+    const int stackBufferSize = 256;
+    char stackBuffer[stackBufferSize];
+    char * buffer = stackBuffer;
+    va_list args;
+    va_start(args, format);
+    int needed = vsnprintf(NULL, 0, format, args);
+    if (needed + 1 > stackBufferSize) {
+        buffer = (char *)malloc(needed + 1);
+    }
+
+    va_start(args, format);
+    vsnprintf(buffer, needed + 1, format, args);
+    buffer[needed] = 0;
+
+    info_.push_back(buffer);
+
+    if (buffer != stackBuffer) {
+        free(buffer);
+    }
 }

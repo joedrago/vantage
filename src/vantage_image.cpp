@@ -11,6 +11,8 @@ using namespace DirectX;
 static XMVECTORF32 backgroundColor = { { { 0.000000000f, 0.000000000f, 0.000000000f, 1.000000000f } } };
 static const float MAX_SCALE = 32.0f;
 
+// #define CLAMP_TO_SCREEN_BOUNDS
+
 void Vantage::unloadImage(bool unloadColoristImage)
 {
     if (image_) {
@@ -31,6 +33,14 @@ void Vantage::unloadImage(bool unloadColoristImage)
         if (coloristImageDiff_) {
             clImageDiffDestroy(coloristContext_, coloristImageDiff_);
             coloristImageDiff_ = nullptr;
+        }
+        if (coloristImageHighlight_) {
+            clImageDestroy(coloristContext_, coloristImageHighlight_);
+            coloristImageHighlight_ = nullptr;
+        }
+        if (coloristHighlightInfo_) {
+            clImageSRGBHighlightPixelInfoDestroy(coloristContext_, coloristHighlightInfo_);
+            coloristHighlightInfo_ = nullptr;
         }
     }
 
@@ -183,6 +193,8 @@ void Vantage::loadImage(int offset)
     const char * filename = imageFiles_[imageFileIndex_].c_str();
     coloristImage_ = clContextRead(coloristContext_, filename, nullptr, nullptr);
 
+    diffMode_ = DIFFMODE_SHOW1;
+
     prepareImage();
     resetImagePos();
     clearOverlay();
@@ -247,10 +259,23 @@ void Vantage::prepareImage()
                 srcImage = coloristImageDiff_->image;
                 break;
         }
-
     } else {
         // Just show an image like normal
         srcImage = coloristImage_;
+    }
+
+    if ((diffMode_ != DIFFMODE_SHOWDIFF) && srgbHighlight_) {
+        if (coloristImageHighlight_) {
+            clImageDestroy(coloristContext_, coloristImageHighlight_);
+            coloristImageHighlight_ = nullptr;
+        }
+        if (coloristHighlightInfo_) {
+            clImageSRGBHighlightPixelInfoDestroy(coloristContext_, coloristHighlightInfo_);
+            coloristHighlightInfo_ = nullptr;
+        }
+        coloristHighlightInfo_ = clImageSRGBHighlightPixelInfoCreate(coloristContext_, srcImage->width * srcImage->height);
+        coloristImageHighlight_ = clImageCreateSRGBHighlight(coloristContext_, srcImage, sdrWhite, &coloristHighlightStats_, coloristHighlightInfo_, nullptr);
+        srcImage = coloristImageHighlight_;
     }
 
     if (srcImage) {
@@ -417,6 +442,9 @@ void Vantage::mouseSetPos(int x, int y)
         imageInfoX_ = (int)(((float)x - imagePosX_) * ((float)coloristImage_->width / imagePosW_));
         imageInfoY_ = (int)(((float)y - imagePosY_) * ((float)coloristImage_->height / imagePosH_));
         clImageDebugDumpPixel(coloristContext_, coloristImage_, imageInfoX_, imageInfoY_, &pixelInfo_);
+        if (coloristImage2_) {
+            clImageDebugDumpPixel(coloristContext_, coloristImage2_, imageInfoX_, imageInfoY_, &pixelInfo2_);
+        }
     }
 }
 
@@ -446,7 +474,6 @@ void Vantage::mouseLeftDoubleClick(int x, int y)
 
 void Vantage::mouseWheel(int x, int y, int delta)
 {
-    // appendOverlay("mouseWheel(%d, %d, %d)", x, y, delta);
     imagePosS_ += (float)delta / 240.0f;
     if (imagePosS_ < 1.0f) {
         imagePosS_ = 1.0f;
@@ -465,6 +492,7 @@ void Vantage::mouseWheel(int x, int y, int delta)
 
 void Vantage::clampImagePos()
 {
+#ifdef CLAMP_TO_SCREEN_BOUNDS
     RECT clientRect;
     GetClientRect(hwnd_, &clientRect);
     float clientW = (float)clientRect.right;
@@ -495,6 +523,7 @@ void Vantage::clampImagePos()
             imagePosY_ = clientH - imagePosH_;
         }
     }
+#endif
 }
 
 void Vantage::adjustThreshold(int amount)
@@ -514,6 +543,13 @@ void Vantage::setDiffMode(DiffMode diffMode)
 {
     if (diffMode_ != diffMode) {
         diffMode_ = diffMode;
+        if (coloristImageDiff_) {
+            if (diffMode_ == DIFFMODE_SHOWDIFF) {
+                srgbHighlight_ = false;
+            }
+        } else {
+            diffMode_ = DIFFMODE_SHOW1;
+        }
         prepareImage();
         render();
     }
@@ -529,6 +565,112 @@ void Vantage::setDiffIntensity(DiffIntensity diffIntensity)
         }
         prepareImage();
         render();
+    }
+}
+
+void Vantage::toggleSrgbHighlight()
+{
+    if (diffMode_ == DIFFMODE_SHOWDIFF) {
+        return;
+    }
+
+    srgbHighlight_ = !srgbHighlight_;
+    prepareImage();
+    render();
+}
+
+void Vantage::updateInfo()
+{
+    info_.clear();
+
+    if (coloristImage_) {
+        appendInfo("Dimensions     : %dx%d (%d bpc)", coloristImage_->width, coloristImage_->height, coloristImage_->depth);
+
+        if (coloristImageDiff_) {
+            const char * showing = "??";
+            switch (diffMode_) {
+                case DIFFMODE_SHOW1:
+                    showing = "Image 1";
+                    break;
+                case DIFFMODE_SHOW2:
+                    showing = "Image 2";
+                    break;
+                case DIFFMODE_SHOWDIFF:
+                    showing = "Diff";
+                    break;
+            }
+            appendInfo("");
+            appendInfo("Showing        : %s", showing);
+        }
+    }
+
+    if ((imageInfoX_ != -1) && (imageInfoY_ != -1)) {
+        clImagePixelInfo * pixelInfo = &pixelInfo_;
+
+        appendInfo("");
+        appendInfo("[%d, %d]", imageInfoX_, imageInfoY_);
+
+        appendInfo("");
+        appendInfo("Image Info:");
+        appendInfo("  R Raw        : %d", pixelInfo->rawR);
+        appendInfo("  G Raw        : %d", pixelInfo->rawG);
+        appendInfo("  B Raw        : %d", pixelInfo->rawB);
+        appendInfo("  A Raw        : %d", pixelInfo->rawA);
+        appendInfo("  x            : %3.3f", pixelInfo->x);
+        appendInfo("  y            : %3.3f", pixelInfo->y);
+        appendInfo("  Y            : %3.3f", pixelInfo->Y);
+
+        if (coloristImage2_) {
+            pixelInfo = &pixelInfo2_;
+
+            appendInfo("");
+            appendInfo("Image Info (2):");
+            appendInfo("  R Raw        : %d", pixelInfo->rawR);
+            appendInfo("  G Raw        : %d", pixelInfo->rawG);
+            appendInfo("  B Raw        : %d", pixelInfo->rawB);
+            appendInfo("  A Raw        : %d", pixelInfo->rawA);
+            appendInfo("  x            : %3.3f", pixelInfo->x);
+            appendInfo("  y            : %3.3f", pixelInfo->y);
+            appendInfo("  Y            : %3.3f", pixelInfo->Y);
+        }
+    }
+
+    if (srgbHighlight_ && coloristHighlightInfo_) {
+        if ((imageInfoX_ != -1) && (imageInfoY_ != -1)) {
+            clImageSRGBHighlightPixel * highlightPixel = &coloristHighlightInfo_->pixels[imageInfoX_ + (imageInfoY_ * coloristImage_->width)];
+            appendInfo("");
+            appendInfo("Pixel Highlight:");
+            appendInfo("  Nits         : %2.2f", highlightPixel->nits);
+            appendInfo("  SRGB Max Nits: %2.2f", highlightPixel->maxNits);
+            appendInfo("  Overbright   : %2.2f%%", 100.0f * highlightPixel->nits / highlightPixel->maxNits);
+            appendInfo("  Out of Gamut : %2.2f%%", 100.0f * highlightPixel->outOfGamut);
+        }
+        appendInfo("");
+        appendInfo("Highlight Stats:");
+        appendInfo("Total Pixels   : %d", coloristImage_->width * coloristImage_->height);
+        appendInfo("  Overbright   : %d (%.1f%%)", coloristHighlightStats_.overbrightPixelCount, 100.0f * coloristHighlightStats_.overbrightPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  Out of Gamut : %d (%.1f%%)", coloristHighlightStats_.outOfGamutPixelCount, 100.0f * coloristHighlightStats_.outOfGamutPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  Both         : %d (%.1f%%)", coloristHighlightStats_.bothPixelCount, 100.0f * coloristHighlightStats_.bothPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  HDR Pixels   : %d (%.1f%%)", coloristHighlightStats_.hdrPixelCount, 100.0f * coloristHighlightStats_.hdrPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  Brightest    : [%d, %d]", coloristHighlightStats_.brightestPixelX, coloristHighlightStats_.brightestPixelY);
+        appendInfo("                 %2.2f nits", coloristHighlightStats_.brightestPixelNits);
+    }
+
+    if (coloristImageDiff_ && (diffMode_ == DIFFMODE_SHOWDIFF)) {
+        appendInfo("");
+        appendInfo("Threshold      : %d", diffThreshold_);
+        appendInfo("Largest Diff   : %d", coloristImageDiff_->largestChannelDiff);
+
+        if ((imageInfoX_ != -1) && (imageInfoY_ != -1)) {
+            int diff = coloristImageDiff_->diffs[imageInfoX_ + (imageInfoY_ * coloristImageDiff_->image->width)];
+            appendInfo("Pixel Diff     : %d", diff);
+        }
+
+        appendInfo("");
+        appendInfo("Total Pixels   : %d", coloristImage_->width * coloristImage_->height);
+        appendInfo("Perfect Matches: %7d (%.1f%%)", coloristImageDiff_->matchCount, (100.0f * (float)coloristImageDiff_->matchCount / coloristImageDiff_->pixelCount));
+        appendInfo("Under Threshold: %7d (%.1f%%)", coloristImageDiff_->underThresholdCount, (100.0f * (float)coloristImageDiff_->underThresholdCount / coloristImageDiff_->pixelCount));
+        appendInfo("Over Threshold : %7d (%.1f%%)", coloristImageDiff_->overThresholdCount, (100.0f * (float)coloristImageDiff_->overThresholdCount / coloristImageDiff_->pixelCount));
     }
 }
 
@@ -625,17 +767,53 @@ void Vantage::render()
         }
     }
 
-    static const unsigned int overlayDuration = 20000;
-    static const unsigned int overlayFade = 1000;
-    DWORD now = GetTickCount();
-    DWORD dt = now - overlayTick_;
-    if (!overlay_.empty() && (dt < overlayDuration)) {
+    updateInfo();
+
+    int64_t now = GetTickCount();
+    int64_t dt = now - overlayTick_;
+    if ((!overlay_.empty() || !info_.empty()) && (dt < overlayDuration_)) {
+
+        const float infoW = 360.0f;
+        float left = (clientW - infoW);
+        float top = 10.0f;
+        float nextLine = 20.0f;
+
+        if (info_.size() > 1) {
+            // Draw transparent black overlay
+            float blackW = infoW;
+            float blackH = clientH;
+            ConstantBuffer cb;
+            cb.transform = XMMatrixIdentity();
+            cb.transform *= XMMatrixScaling(blackW, blackH, 1.0f);
+            cb.transform *= XMMatrixTranslation(left, 0, 0.0f);
+            cb.transform *= XMMatrixOrthographicOffCenterRH(0.0f, clientW, clientH, 0.0f, -1.0f, 1.0f);
+            cb.params = XMFLOAT4(
+                1.0f, // hdrActive_ ? 1.0f : 0.0f,
+                0.0f, // forceSDR_ ? 1.0f : 0.0f,
+                0.0f, // tonemap_ ? 1.0f : 0.0f,
+                0);
+            context_->UpdateSubresource(constantBuffer_, 0, nullptr, &cb, 0, 0);
+            UINT stride = sizeof( SimpleVertex );
+            UINT offset = 0;
+            context_->IASetVertexBuffers(0, 1, &vertexBuffer_, &stride, &offset);
+            context_->IASetInputLayout(vertexLayout_);
+            context_->IASetIndexBuffer(indexBuffer_, DXGI_FORMAT_R16_UINT, 0);
+            context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            context_->VSSetShader(vertexShader_, nullptr, 0);
+            context_->VSSetConstantBuffers(0, 1, &constantBuffer_);
+            context_->PSSetShader(pixelShader_, nullptr, 0);
+            context_->PSSetConstantBuffers(0, 1, &constantBuffer_);
+            context_->PSSetShaderResources(0, 1, &black_);
+            context_->PSSetSamplers(0, 1, &sampler_);
+            context_->DrawIndexed(6, 0, 0);
+        }
+
         beginText();
 
         int i = 0;
         float lum = 1.0f;
-        if (dt > (overlayDuration - overlayFade)) {
-            lum = (overlayFade - (dt - (overlayDuration - overlayFade))) / 1000.0f;
+        if (dt > (overlayDuration_ - overlayFade_)) {
+            lum = (overlayFade_ - (dt - (overlayDuration_ - overlayFade_))) / 1000.0f;
         }
 
         if (hdrActive_) {
@@ -652,48 +830,15 @@ void Vantage::render()
         } else {
             sprintf(buffer, "SDR: %d nits", sdrWhite);
         }
-        drawText(buffer, 10, clientH - 40.0f, lum);
+        drawText(buffer, 10, clientH - 25.0f, lum);
 
         for (auto it = overlay_.begin(); it != overlay_.end(); ++it, ++i) {
             drawText(it->c_str(), 10, 10.0f + (i * 20.0f), lum);
         }
 
-        if (coloristImageDiff_) {
-            float left = clientW - 500.0f;
-            float top = 20.0f;
-            float nextLine = 20.0f;
-
-            sprintf(buffer, "Threshold        : %d", diffThreshold_);
-            drawText(buffer, left, top, lum);
-            top += nextLine;
-
-            sprintf(buffer, "Largest Chan Diff: %d", coloristImageDiff_->largestChannelDiff);
-            drawText(buffer, left, top, lum);
-            top += nextLine;
-
-            if ((imageInfoX_ != -1) && (imageInfoY_ != -1)) {
-                int diff = coloristImageDiff_->diffs[imageInfoX_ + (imageInfoY_ * coloristImageDiff_->image->width)];
-                sprintf(buffer, "Diff (%4d, %4d): %d", imageInfoX_, imageInfoY_, diff);
-                drawText(buffer, left, top, lum);
-                top += nextLine;
-            }
-
-            top += nextLine; // blank line
-
-            sprintf(buffer, "Perfect Matches  : %7d (%.1f%%)", coloristImageDiff_->matchCount, (100.0f * (float)coloristImageDiff_->matchCount / coloristImageDiff_->pixelCount));
-            drawText(buffer, left, top, lum);
-            top += nextLine;
-
-            sprintf(buffer, "Under Threshold  : %7d (%.1f%%)", coloristImageDiff_->underThresholdCount, (100.0f * (float)coloristImageDiff_->underThresholdCount / coloristImageDiff_->pixelCount));
-            drawText(buffer, left, top, lum);
-            top += nextLine;
-
-            sprintf(buffer, "Over Threshold   : %7d (%.1f%%)", coloristImageDiff_->overThresholdCount, (100.0f * (float)coloristImageDiff_->overThresholdCount / coloristImageDiff_->pixelCount));
-            drawText(buffer, left, top, lum);
-            top += nextLine;
-
-            sprintf(buffer, "Total Pixels     : %7d", coloristImageDiff_->matchCount);
-            drawText(buffer, left, top, lum);
+        left += 10.0f; // margin
+        for (auto it = info_.begin(); it != info_.end(); ++it, ++i) {
+            drawText(it->c_str(), left, top, lum);
             top += nextLine;
         }
 

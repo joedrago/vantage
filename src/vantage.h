@@ -72,6 +72,7 @@ public:
     void loadImage(int offset);
     void unloadImage(bool unloadColoristImage = true);
     void kickOverlay();
+    void killOverlay();
     void resetImagePos();
 
     void mouseLeftDown(int x, int y);
@@ -83,6 +84,7 @@ public:
     void adjustThreshold(int amount);
     void setDiffMode(DiffMode diffMode);
     void setDiffIntensity(DiffIntensity diffIntensity);
+    void toggleSrgbHighlight();
 
 protected:
     bool createWindow();
@@ -102,11 +104,17 @@ protected:
     void clearOverlay();
     void appendOverlay(const char * format, ...);
 
+    void updateInfo();
+    void appendInfo(const char * format, ...);
+
     void calcImageSize();
     void calcCenteredImagePos(float & posX, float & posY);
     void clampImagePos();
 
     unsigned int sdrWhiteLevel();
+
+    static const unsigned int overlayDuration_ = 20000;
+    static const unsigned int overlayFade_ = 1000;
 
 protected:
     HINSTANCE hInstance_;
@@ -117,6 +125,7 @@ protected:
     bool fullscreen_;
     bool hdrActive_;
     bool imageHDR_;
+    bool srgbHighlight_;
     unsigned int imageWhiteLevel_;
     int diffThreshold_;
     DiffMode diffMode_;
@@ -125,6 +134,9 @@ protected:
     clImage * coloristImage_;
     clImage * coloristImage2_;
     clImageDiff * coloristImageDiff_;
+    clImage * coloristImageHighlight_;
+    clImageSRGBHighlightPixelInfo * coloristHighlightInfo_;
+    clImageSRGBHighlightStats coloristHighlightStats_;
 
     // D3D
     D3D_DRIVER_TYPE driverType_;
@@ -145,6 +157,7 @@ protected:
     ID3D11Buffer * indexBuffer_;
     ID3D11SamplerState * sampler_;
     ID3D11ShaderResourceView * image_;
+    ID3D11ShaderResourceView * black_;
 
     // Fonts
     SpriteFont * fontSmall_;
@@ -152,7 +165,8 @@ protected:
 
     // Overlay
     std::vector<std::string> overlay_;
-    DWORD overlayTick_;
+    std::vector<std::string> info_;
+    int64_t overlayTick_;
     static const unsigned int MAX_OVERLAY_LINES = 4;
 
     // Image list
@@ -175,6 +189,7 @@ protected:
     int imageInfoX_;
     int imageInfoY_;
     clImagePixelInfo pixelInfo_;
+    clImagePixelInfo pixelInfo2_;
 };
 
 #endif // ifndef VANTAGE_H

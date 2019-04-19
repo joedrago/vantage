@@ -195,6 +195,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     if (v)
                         v->resetImagePos();
                     break;
+                case 115: // S
+                    if (v)
+                        v->toggleSrgbHighlight();
+                    break;
 
                 case 122: // Z
                     if (v)
@@ -221,7 +225,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         {
             switch (wParam) {
                 case VK_ESCAPE:
-                    PostQuitMessage(0);
+                    v->killOverlay();
                     break;
                 case VK_LEFT:
                     if (v)
@@ -281,6 +285,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     if (v)
                         v->onToggleFullscreen();
                     break;
+                case ID_VIEW_RESETIMAGEPOSITION:
+                    if (v)
+                        v->resetImagePos();
+                    break;
                 case ID_FILE_OPEN:
                     if (v)
                         v->onFileOpen();
@@ -296,6 +304,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case ID_DIFF_DIFFCURRENTIMAGEAGAINST:
                     if (v)
                         v->onDiffCurrentImage();
+                    break;
+
+                case ID_VIEW_TOGGLESRGBHIGHLIGHT:
+                    if (v)
+                        v->toggleSrgbHighlight();
                     break;
 
                 case ID_DIFF_SHOWIMAGE1:

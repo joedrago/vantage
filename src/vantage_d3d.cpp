@@ -299,6 +299,44 @@ HRESULT Vantage::createDevice()
         return hr;
     }
 
+    D3D11_TEXTURE2D_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.Width = 1;
+    desc.Height = 1;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+
+    uint32_t blackPixel = 0x80000000;
+
+    D3D11_SUBRESOURCE_DATA initData;
+    ZeroMemory(&initData, sizeof(initData));
+    initData.pSysMem = (const void *)&blackPixel;
+    initData.SysMemPitch = 4;
+    initData.SysMemSlicePitch = 4;
+
+    ID3D11Texture2D * tex = nullptr;
+    hr = device_->CreateTexture2D(&desc, &initData, &tex);
+    if (SUCCEEDED(hr) && (tex != nullptr)) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
+        memset(&SRVDesc, 0, sizeof(SRVDesc));
+        SRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        SRVDesc.Texture2D.MipLevels = 1;
+
+        hr = device_->CreateShaderResourceView(tex, &SRVDesc, &black_);
+        if (FAILED(hr)) {
+            tex->Release();
+            black_ = nullptr;
+        }
+        tex->Release();
+    }
+
     fontSmall_ = new SpriteFont(device_, fontSmallBinaryData, fontSmallBinarySize);
     spriteBatch_ = new SpriteBatch(context_);
     return S_OK;
@@ -323,6 +361,11 @@ void Vantage::destroyDevice()
     if (image_) {
         image_->Release();
         image_ = nullptr;
+    }
+
+    if (black_) {
+        black_->Release();
+        black_ = nullptr;
     }
 
     if (sampler_) {
