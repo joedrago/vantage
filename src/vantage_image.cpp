@@ -778,7 +778,7 @@ void Vantage::render()
         float top = 10.0f;
         float nextLine = 20.0f;
 
-        if (info_.size() > 1) {
+        if (info_.size() > 3) {
             // Draw transparent black overlay
             float blackW = infoW;
             float blackH = clientH;
