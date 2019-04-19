@@ -137,6 +137,13 @@ void Vantage::loadDiff(const char * filename1, const char * filename2)
         fn2 = filename1;
     }
 
+    char full1[MAX_PATH];
+    char full2[MAX_PATH];
+    GetFullPathNameA(fn1, MAX_PATH, full1, nullptr);
+    GetFullPathNameA(fn2, MAX_PATH, full2, nullptr);
+    fn1 = full1;
+    fn2 = full2;
+
     clearOverlay();
 
     const char * failureReason = nullptr;
@@ -154,18 +161,42 @@ void Vantage::loadDiff(const char * filename1, const char * filename2)
         failureReason = "Dimensions mismatch";
     }
 
+    // Trim all matching portions from the front of the names
+    const char * short1 = fn1;
+    const char * short2 = fn2;
+    while (*short1 && (*short1 == *short2)) {
+        ++short1;
+        ++short2;
+    }
+    // now walk back the pointers to the nearest path separator, if any
+    while (short1 != fn1) {
+        --short1;
+        if (*short1 == '\\') {
+
+            ++short1;
+            break;
+        }
+    }
+    while (short2 != fn2) {
+        --short2;
+        if (*short2 == '\\') {
+            ++short2;
+            break;
+        }
+    }
+
     if (failureReason) {
         unloadImage();
         appendOverlay("Failed to load diff (%s):", failureReason);
-        appendOverlay("* %s", fn1);
-        appendOverlay("* %s", fn2);
+        appendOverlay("* %s", short1);
+        appendOverlay("* %s", short2);
         imageFiles_.clear();
         return;
     }
 
-    appendOverlay("Loaded diff:");
-    appendOverlay("* %s", fn1);
-    appendOverlay("* %s", fn2);
+    appendOverlay("Loaded diff: (in 1st color volume)");
+    appendOverlay("* 1: %s", short1);
+    appendOverlay("* 2: %s", short2);
 
     diffMode_ = DIFFMODE_SHOWDIFF;
     diffIntensity_ = DIFFINTENSITY_BRIGHT;
@@ -199,13 +230,20 @@ void Vantage::loadImage(int offset)
 
     diffMode_ = DIFFMODE_SHOW1;
 
+    const char * shortFilename = strrchr(filename, '\\');
+    if (shortFilename) {
+        ++shortFilename;
+    } else {
+        shortFilename = filename;
+    }
+
     prepareImage();
     resetImagePos();
     clearOverlay();
     if (coloristImage_) {
-        appendOverlay("[%d/%d] Loaded: %s", imageFileIndex_ + 1, imageFiles_.size(), filename);
+        appendOverlay("[%d/%d] Loaded: %s", imageFileIndex_ + 1, imageFiles_.size(), shortFilename);
     } else {
-        appendOverlay("[%d/%d] Failed to load: %s", imageFileIndex_ + 1, imageFiles_.size(), filename);
+        appendOverlay("[%d/%d] Failed to load: %s", imageFileIndex_ + 1, imageFiles_.size(), shortFilename);
     }
 
     render();
@@ -223,10 +261,6 @@ void Vantage::prepareImage()
 
     if (coloristImage_ && coloristImage2_) {
         if (!clProfileMatches(coloristContext_, coloristImage_->profile, coloristImage2_->profile) || (coloristImage_->depth != coloristImage2_->depth)) {
-            clImage * converted = clImageConvert(coloristContext_, coloristImage2_, coloristContext_->params.jobs, coloristImage_->depth, coloristImage_->profile, CL_TONEMAP_OFF);
-            clImageDestroy(coloristContext_, coloristImage2_);
-            coloristImage2_ = converted;
-
             if (coloristImageDiff_) {
                 clImageDiffDestroy(coloristContext_, coloristImageDiff_);
                 coloristImageDiff_ = nullptr;
@@ -236,6 +270,11 @@ void Vantage::prepareImage()
         if (coloristImageDiff_) {
             clImageDiffUpdate(coloristContext_, coloristImageDiff_, diffThreshold_);
         } else {
+            clImage * secondImage = coloristImage2_;
+            if (!clProfileMatches(coloristContext_, coloristImage_->profile, coloristImage2_->profile) || (coloristImage_->depth != coloristImage2_->depth)) {
+                secondImage = clImageConvert(coloristContext_, coloristImage2_, coloristContext_->params.jobs, coloristImage_->depth, coloristImage_->profile, CL_TONEMAP_OFF);
+            }
+
             float minIntensity = 0.0f;
             switch (diffIntensity_) {
                 case DIFFINTENSITY_ORIGINAL:
@@ -249,7 +288,11 @@ void Vantage::prepareImage()
                     break;
             }
 
-            coloristImageDiff_ = clImageDiffCreate(coloristContext_, coloristImage_, coloristImage2_, coloristContext_->params.jobs, minIntensity, diffThreshold_);
+            coloristImageDiff_ = clImageDiffCreate(coloristContext_, coloristImage_, secondImage, coloristContext_->params.jobs, minIntensity, diffThreshold_);
+
+            if (coloristImage2_ != secondImage) {
+                clImageDestroy(coloristContext_, secondImage);
+            }
         }
 
         switch (diffMode_) {
