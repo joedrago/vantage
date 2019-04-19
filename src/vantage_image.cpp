@@ -140,6 +140,8 @@ void Vantage::loadDiff(const char * filename1, const char * filename2)
     clearOverlay();
 
     const char * failureReason = nullptr;
+    coloristImageFileSize_ = clFileSize(fn1);
+    coloristImageFileSize2_ = clFileSize(fn2);
     coloristImage_ = clContextRead(coloristContext_, fn1, nullptr, nullptr);
     coloristImage2_ = clContextRead(coloristContext_, fn2, nullptr, nullptr);
     if (!coloristImage_ || !coloristImage2_) {
@@ -191,6 +193,8 @@ void Vantage::loadImage(int offset)
     imageFileIndex_ = loadIndex;
 
     const char * filename = imageFiles_[imageFileIndex_].c_str();
+    coloristImageFileSize_ = clFileSize(filename);
+    coloristImageFileSize2_ = 0;
     coloristImage_ = clContextRead(coloristContext_, filename, nullptr, nullptr);
 
     diffMode_ = DIFFMODE_SHOW1;
@@ -586,6 +590,35 @@ void Vantage::updateInfo()
     if (coloristImage_) {
         appendInfo("Dimensions     : %dx%d (%d bpc)", coloristImage_->width, coloristImage_->height, coloristImage_->depth);
 
+        int fileSize = 0;
+        if (coloristImageDiff_) {
+            switch (diffMode_) {
+                case DIFFMODE_SHOW1:
+                    fileSize = coloristImageFileSize_;
+                    break;
+                case DIFFMODE_SHOW2:
+                    fileSize = coloristImageFileSize2_;
+                    break;
+                case DIFFMODE_SHOWDIFF:
+                    fileSize = 0;
+                    break;
+            }
+        } else {
+            fileSize = coloristImageFileSize_;
+        }
+
+        if (fileSize > 0) {
+            if (fileSize > (1024 * 1024)) {
+                appendInfo("File Size      : %2.2f MB", (float)fileSize / (1024.0f * 1024.0f));
+            } else if (fileSize > 1024) {
+                appendInfo("File Size      : %2.2f KB", (float)fileSize / 1024.0f);
+            } else {
+                appendInfo("File Size      : %d bytes", (float)fileSize);
+            }
+        } else {
+            appendInfo("");
+        }
+
         if (coloristImageDiff_) {
             const char * showing = "??";
             switch (diffMode_) {
@@ -599,7 +632,6 @@ void Vantage::updateInfo()
                     showing = "Diff";
                     break;
             }
-            appendInfo("");
             appendInfo("Showing        : %s", showing);
         }
     }

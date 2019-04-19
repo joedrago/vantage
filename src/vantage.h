@@ -137,6 +137,8 @@ protected:
     clImage * coloristImageHighlight_;
     clImageSRGBHighlightPixelInfo * coloristHighlightInfo_;
     clImageSRGBHighlightStats coloristHighlightStats_;
+    int coloristImageFileSize_;
+    int coloristImageFileSize2_;
 
     // D3D
     D3D_DRIVER_TYPE driverType_;
