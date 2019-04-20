@@ -846,6 +846,11 @@ void Vantage::render()
         clProfileQuery(coloristContext_, coloristImage_->profile, NULL, &curve, NULL);
         if (curve.type == CL_PCT_HLG) {
             showHLG = true;
+        } else if (coloristImage2_) {
+            clProfileQuery(coloristContext_, coloristImage2_->profile, NULL, &curve, NULL);
+            if (curve.type == CL_PCT_HLG) {
+                showHLG = true;
+            }
         }
     }
 
@@ -908,7 +913,7 @@ void Vantage::render()
         char buffer[1024];
         int sdrWhite = sdrWhiteLevel();
         if (showHLG) {
-            sprintf(buffer, "SDR: %d nits, peak: %d nits", sdrWhite, clTransformCalcHLGLuminance(sdrWhite));
+            sprintf(buffer, "SDR: %d nits, HLG peak: %d nits", sdrWhite, clTransformCalcHLGLuminance(sdrWhite));
         } else {
             sprintf(buffer, "SDR: %d nits", sdrWhite);
         }
