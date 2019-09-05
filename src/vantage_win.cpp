@@ -3,6 +3,12 @@
 
 #include <windowsx.h>
 
+#include "version.h"
+#include "colorist/version.h"
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#define VANTAGE_WINDOW_TITLE "Vantage " STR(VANTAGE_VERSION) " (colorist " COLORIST_VERSION_STRING ")"
+
 #define VANTAGE_STYLE_WINDOWED   (WS_OVERLAPPEDWINDOW | WS_VISIBLE)
 #define VANTAGE_STYLE_FULLSCREEN (WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE)
 
@@ -26,7 +32,7 @@ bool Vantage::createWindow() //(HINSTANCE hInstance, LPWSTR lpCmdLine, int nCmdS
     if (!RegisterClassEx(&wcex))
         return false;
 
-    hwnd_ = CreateWindow("vantageWindowClass", "Vantage", VANTAGE_STYLE_WINDOWED, CW_USEDEFAULT, CW_USEDEFAULT, windowPos_.w, windowPos_.h, nullptr, nullptr, hInstance_, nullptr);
+    hwnd_ = CreateWindow("vantageWindowClass", VANTAGE_WINDOW_TITLE, VANTAGE_STYLE_WINDOWED, CW_USEDEFAULT, CW_USEDEFAULT, windowPos_.w, windowPos_.h, nullptr, nullptr, hInstance_, nullptr);
     if (!hwnd_)
         return false;
 
