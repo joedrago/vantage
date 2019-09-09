@@ -1,23 +1,31 @@
+// ---------------------------------------------------------------------------
+//                         Copyright Joe Drago 2019.
+//         Distributed under the Boost Software License, Version 1.0.
+//            (See accompanying file LICENSE_1_0.txt or copy at
+//                  http://www.boost.org/LICENSE_1_0.txt)
+// ---------------------------------------------------------------------------
+
 #include "vantage.h"
+
 #include "resource.h"
 
 #include <windowsx.h>
 
-#include "version.h"
 #include "colorist/version.h"
+#include "version.h"
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 #define VANTAGE_WINDOW_TITLE "Vantage " STR(VANTAGE_VERSION) " (colorist " COLORIST_VERSION_STRING ")"
 
-#define VANTAGE_STYLE_WINDOWED   (WS_OVERLAPPEDWINDOW | WS_VISIBLE)
+#define VANTAGE_STYLE_WINDOWED (WS_OVERLAPPEDWINDOW | WS_VISIBLE)
 #define VANTAGE_STYLE_FULLSCREEN (WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE)
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-bool Vantage::createWindow() //(HINSTANCE hInstance, LPWSTR lpCmdLine, int nCmdShow)
+bool Vantage::createWindow()
 {
     WNDCLASSEX wcex;
-    wcex.cbSize = sizeof( WNDCLASSEX );
+    wcex.cbSize = sizeof(WNDCLASSEX);
     wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wcex.lpfnWndProc = WndProc;
     wcex.cbClsExtra = 0;
@@ -25,14 +33,24 @@ bool Vantage::createWindow() //(HINSTANCE hInstance, LPWSTR lpCmdLine, int nCmdS
     wcex.hInstance = hInstance_;
     wcex.hIcon = LoadIcon(hInstance_, (LPCTSTR)IDI_VANTAGE);
     wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground = (HBRUSH)( COLOR_WINDOW + 1 );
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wcex.lpszMenuName = nullptr;
     wcex.lpszClassName = "vantageWindowClass";
     wcex.hIconSm = LoadIcon(wcex.hInstance, (LPCTSTR)IDI_APPLICATION);
     if (!RegisterClassEx(&wcex))
         return false;
 
-    hwnd_ = CreateWindow("vantageWindowClass", VANTAGE_WINDOW_TITLE, VANTAGE_STYLE_WINDOWED, CW_USEDEFAULT, CW_USEDEFAULT, windowPos_.w, windowPos_.h, nullptr, nullptr, hInstance_, nullptr);
+    hwnd_ = CreateWindow("vantageWindowClass",
+                         VANTAGE_WINDOW_TITLE,
+                         VANTAGE_STYLE_WINDOWED,
+                         CW_USEDEFAULT,
+                         CW_USEDEFAULT,
+                         windowPos_.w,
+                         windowPos_.h,
+                         nullptr,
+                         nullptr,
+                         hInstance_,
+                         nullptr);
     if (!hwnd_)
         return false;
 
@@ -64,7 +82,12 @@ void Vantage::updateWindowPos()
         mi.cbSize = sizeof(MONITORINFO);
         GetMonitorInfo(monitor, &mi);
         SetWindowLongPtr(hwnd_, GWL_STYLE, VANTAGE_STYLE_FULLSCREEN);
-        MoveWindow(hwnd_, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, TRUE);
+        MoveWindow(hwnd_,
+                   mi.rcMonitor.left,
+                   mi.rcMonitor.top,
+                   mi.rcMonitor.right - mi.rcMonitor.left,
+                   mi.rcMonitor.bottom - mi.rcMonitor.top,
+                   TRUE);
     } else {
         SetWindowLongPtr(hwnd_, GWL_STYLE, VANTAGE_STYLE_WINDOWED);
         MoveWindow(hwnd_, windowPos_.x, windowPos_.y, windowPos_.w, windowPos_.h, TRUE);
@@ -91,7 +114,8 @@ void Vantage::onWindowPosChanged(int x, int y, int w, int h)
     checkHDR();
 }
 
-static const char * imageFileFilter = "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jpeg, *.jp2, *.j2k, *.png, *.tif, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jpeg;*.jp2;*.j2k;*.png;*.tif;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+static const char * imageFileFilter =
+    "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jpeg, *.jp2, *.j2k, *.png, *.tif, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jpeg;*.jp2;*.j2k;*.png;*.tif;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
 
 void Vantage::onFileOpen()
 {
@@ -166,8 +190,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     Vantage * v = (Vantage *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
     switch (message) {
-        case WM_CHAR:
-        {
+        case WM_CHAR: {
             unsigned int key = (unsigned int)wParam;
             switch (key) {
                 case 49: // 1
@@ -227,8 +250,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             break;
         }
 
-        case WM_KEYDOWN:
-        {
+        case WM_KEYDOWN: {
             switch (wParam) {
                 case VK_ESCAPE:
                     v->killOverlay();
@@ -434,8 +456,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             }
             break;
 
-        case WM_DROPFILES:
-        {
+        case WM_DROPFILES: {
             filename1[0] = 0;
             filename2[0] = 0;
 
@@ -458,8 +479,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             break;
         }
 
-        case WM_WINDOWPOSCHANGED:
-        {
+        case WM_WINDOWPOSCHANGED: {
             WINDOWPOS * pos = (WINDOWPOS *)lParam;
             if (v)
                 v->onWindowPosChanged(pos->x, pos->y, pos->cx, pos->cy);

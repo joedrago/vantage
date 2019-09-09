@@ -1,11 +1,19 @@
+// ---------------------------------------------------------------------------
+//                         Copyright Joe Drago 2019.
+//         Distributed under the Boost Software License, Version 1.0.
+//            (See accompanying file LICENSE_1_0.txt or copy at
+//                  http://www.boost.org/LICENSE_1_0.txt)
+// ---------------------------------------------------------------------------
+
 #include "vantage.h"
 
 #include <algorithm>
 #include <shlwapi.h>
 
-#include <dxgi1_6.h>
 #include <directxmath.h>
+#include <dxgi1_6.h>
 #pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "shlwapi.lib")
 using namespace DirectX;
 
 static XMVECTORF32 backgroundColor = { { { 0.000000000f, 0.000000000f, 0.000000000f, 1.000000000f } } };
@@ -53,22 +61,36 @@ static bool isImageFile(const char * filename)
 {
     const char * ext = strrchr(filename, '.');
     if (ext) {
-        if (!strcmp(ext, ".apg")) return true;
-        if (!strcmp(ext, ".avif")) return true;
-        if (!strcmp(ext, ".bmp")) return true;
-        if (!strcmp(ext, ".jpg")) return true;
-        if (!strcmp(ext, ".jpeg")) return true;
-        if (!strcmp(ext, ".jp2")) return true;
-        if (!strcmp(ext, ".j2k")) return true;
-        if (!strcmp(ext, ".png")) return true;
-        if (!strcmp(ext, ".tif")) return true;
-        if (!strcmp(ext, ".tiff")) return true;
-        if (!strcmp(ext, ".webp")) return true;
+        if (!strcmp(ext, ".apg"))
+            return true;
+        if (!strcmp(ext, ".avif"))
+            return true;
+        if (!strcmp(ext, ".bmp"))
+            return true;
+        if (!strcmp(ext, ".jpg"))
+            return true;
+        if (!strcmp(ext, ".jpeg"))
+            return true;
+        if (!strcmp(ext, ".jp2"))
+            return true;
+        if (!strcmp(ext, ".j2k"))
+            return true;
+        if (!strcmp(ext, ".png"))
+            return true;
+        if (!strcmp(ext, ".tif"))
+            return true;
+        if (!strcmp(ext, ".tiff"))
+            return true;
+        if (!strcmp(ext, ".webp"))
+            return true;
     }
     return false;
 }
 
-static bool sortAlphabeticallyIgnoringCase(const std::string & a, const std::string & b) { return _stricmp(a.c_str(), b.c_str()) < 0; }
+static bool sortAlphabeticallyIgnoringCase(const std::string & a, const std::string & b)
+{
+    return _stricmp(a.c_str(), b.c_str()) < 0;
+}
 
 void Vantage::loadImage(const char * filename)
 {
@@ -172,7 +194,6 @@ void Vantage::loadDiff(const char * filename1, const char * filename2)
     while (short1 != fn1) {
         --short1;
         if (*short1 == '\\') {
-
             ++short1;
             break;
         }
@@ -260,7 +281,8 @@ void Vantage::prepareImage()
     coloristContext_->defaultLuminance = sdrWhite;
 
     if (coloristImage_ && coloristImage2_) {
-        if (!clProfileMatches(coloristContext_, coloristImage_->profile, coloristImage2_->profile) || (coloristImage_->depth != coloristImage2_->depth)) {
+        if (!clProfileMatches(coloristContext_, coloristImage_->profile, coloristImage2_->profile) ||
+            (coloristImage_->depth != coloristImage2_->depth)) {
             if (coloristImageDiff_) {
                 clImageDiffDestroy(coloristContext_, coloristImageDiff_);
                 coloristImageDiff_ = nullptr;
@@ -271,8 +293,14 @@ void Vantage::prepareImage()
             clImageDiffUpdate(coloristContext_, coloristImageDiff_, diffThreshold_);
         } else {
             clImage * secondImage = coloristImage2_;
-            if (!clProfileMatches(coloristContext_, coloristImage_->profile, coloristImage2_->profile) || (coloristImage_->depth != coloristImage2_->depth)) {
-                secondImage = clImageConvert(coloristContext_, coloristImage2_, coloristContext_->params.jobs, coloristImage_->depth, coloristImage_->profile, CL_TONEMAP_OFF);
+            if (!clProfileMatches(coloristContext_, coloristImage_->profile, coloristImage2_->profile) ||
+                (coloristImage_->depth != coloristImage2_->depth)) {
+                secondImage = clImageConvert(coloristContext_,
+                                             coloristImage2_,
+                                             coloristContext_->params.jobs,
+                                             coloristImage_->depth,
+                                             coloristImage_->profile,
+                                             CL_TONEMAP_OFF);
             }
 
             float minIntensity = 0.0f;
@@ -288,7 +316,8 @@ void Vantage::prepareImage()
                     break;
             }
 
-            coloristImageDiff_ = clImageDiffCreate(coloristContext_, coloristImage_, secondImage, coloristContext_->params.jobs, minIntensity, diffThreshold_);
+            coloristImageDiff_ =
+                clImageDiffCreate(coloristContext_, coloristImage_, secondImage, coloristContext_->params.jobs, minIntensity, diffThreshold_);
 
             if (coloristImage2_ != secondImage) {
                 clImageDestroy(coloristContext_, secondImage);
@@ -321,7 +350,8 @@ void Vantage::prepareImage()
             coloristHighlightInfo_ = nullptr;
         }
         coloristHighlightInfo_ = clImageSRGBHighlightPixelInfoCreate(coloristContext_, srcImage->width * srcImage->height);
-        coloristImageHighlight_ = clImageCreateSRGBHighlight(coloristContext_, srcImage, sdrWhite, &coloristHighlightStats_, coloristHighlightInfo_, nullptr);
+        coloristImageHighlight_ =
+            clImageCreateSRGBHighlight(coloristContext_, srcImage, sdrWhite, &coloristHighlightStats_, coloristHighlightInfo_, nullptr);
         srcImage = coloristImageHighlight_;
     }
 
@@ -348,15 +378,16 @@ void Vantage::prepareImage()
             imageHDR_ = false;
         }
         clProfile * profile = clProfileCreate(coloristContext_, &primaries, &curve, dstLuminance, NULL);
-        clImage * convertedImage = clImageConvert(coloristContext_, srcImage, coloristContext_->params.jobs, 16, profile, CL_TONEMAP_AUTO);
+        clImage * convertedImage =
+            clImageConvert(coloristContext_, srcImage, coloristContext_->params.jobs, 16, profile, CL_TONEMAP_AUTO);
         clProfileDestroy(coloristContext_, profile);
 
         D3D11_TEXTURE2D_DESC desc;
         ZeroMemory(&desc, sizeof(desc));
-        desc.Width = static_cast <UINT> (convertedImage->width);
-        desc.Height = static_cast <UINT> (convertedImage->height);
-        desc.MipLevels = static_cast <UINT> (1);
-        desc.ArraySize = static_cast <UINT> (1);
+        desc.Width = static_cast<UINT>(convertedImage->width);
+        desc.Height = static_cast<UINT>(convertedImage->height);
+        desc.MipLevels = static_cast<UINT>(1);
+        desc.ArraySize = static_cast<UINT>(1);
         desc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
         desc.SampleDesc.Count = 1;
         desc.SampleDesc.Quality = 0;
@@ -368,7 +399,7 @@ void Vantage::prepareImage()
         ZeroMemory(&initData, sizeof(initData));
         initData.pSysMem = (const void *)convertedImage->pixels;
         initData.SysMemPitch = convertedImage->width * 4 * 2;
-        initData.SysMemSlicePitch = static_cast <UINT> (convertedImage->width * convertedImage->height * 4 * 2);
+        initData.SysMemSlicePitch = static_cast<UINT>(convertedImage->width * convertedImage->height * 4 * 2);
 
         ID3D11Texture2D * tex = nullptr;
         HRESULT hr = device_->CreateTexture2D(&desc, &initData, &tex);
@@ -719,7 +750,8 @@ void Vantage::updateInfo()
 
     if (srgbHighlight_ && coloristHighlightInfo_) {
         if ((imageInfoX_ != -1) && (imageInfoY_ != -1)) {
-            clImageSRGBHighlightPixel * highlightPixel = &coloristHighlightInfo_->pixels[imageInfoX_ + (imageInfoY_ * coloristImage_->width)];
+            clImageSRGBHighlightPixel * highlightPixel =
+                &coloristHighlightInfo_->pixels[imageInfoX_ + (imageInfoY_ * coloristImage_->width)];
             appendInfo("");
             appendInfo("Pixel Highlight:");
             appendInfo("  Nits         : %2.2f", highlightPixel->nits);
@@ -730,10 +762,18 @@ void Vantage::updateInfo()
         appendInfo("");
         appendInfo("Highlight Stats:");
         appendInfo("Total Pixels   : %d", coloristImage_->width * coloristImage_->height);
-        appendInfo("  Overbright   : %d (%.1f%%)", coloristHighlightStats_.overbrightPixelCount, 100.0f * coloristHighlightStats_.overbrightPixelCount / coloristHighlightStats_.pixelCount);
-        appendInfo("  Out of Gamut : %d (%.1f%%)", coloristHighlightStats_.outOfGamutPixelCount, 100.0f * coloristHighlightStats_.outOfGamutPixelCount / coloristHighlightStats_.pixelCount);
-        appendInfo("  Both         : %d (%.1f%%)", coloristHighlightStats_.bothPixelCount, 100.0f * coloristHighlightStats_.bothPixelCount / coloristHighlightStats_.pixelCount);
-        appendInfo("  HDR Pixels   : %d (%.1f%%)", coloristHighlightStats_.hdrPixelCount, 100.0f * coloristHighlightStats_.hdrPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  Overbright   : %d (%.1f%%)",
+                   coloristHighlightStats_.overbrightPixelCount,
+                   100.0f * coloristHighlightStats_.overbrightPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  Out of Gamut : %d (%.1f%%)",
+                   coloristHighlightStats_.outOfGamutPixelCount,
+                   100.0f * coloristHighlightStats_.outOfGamutPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  Both         : %d (%.1f%%)",
+                   coloristHighlightStats_.bothPixelCount,
+                   100.0f * coloristHighlightStats_.bothPixelCount / coloristHighlightStats_.pixelCount);
+        appendInfo("  HDR Pixels   : %d (%.1f%%)",
+                   coloristHighlightStats_.hdrPixelCount,
+                   100.0f * coloristHighlightStats_.hdrPixelCount / coloristHighlightStats_.pixelCount);
         appendInfo("  Brightest    : [%d, %d]", coloristHighlightStats_.brightestPixelX, coloristHighlightStats_.brightestPixelY);
         appendInfo("                 %2.2f nits", coloristHighlightStats_.brightestPixelNits);
     }
@@ -750,9 +790,15 @@ void Vantage::updateInfo()
 
         appendInfo("");
         appendInfo("Total Pixels   : %d", coloristImage_->width * coloristImage_->height);
-        appendInfo("Perfect Matches: %7d (%.1f%%)", coloristImageDiff_->matchCount, (100.0f * (float)coloristImageDiff_->matchCount / coloristImageDiff_->pixelCount));
-        appendInfo("Under Threshold: %7d (%.1f%%)", coloristImageDiff_->underThresholdCount, (100.0f * (float)coloristImageDiff_->underThresholdCount / coloristImageDiff_->pixelCount));
-        appendInfo("Over Threshold : %7d (%.1f%%)", coloristImageDiff_->overThresholdCount, (100.0f * (float)coloristImageDiff_->overThresholdCount / coloristImageDiff_->pixelCount));
+        appendInfo("Perfect Matches: %7d (%.1f%%)",
+                   coloristImageDiff_->matchCount,
+                   (100.0f * (float)coloristImageDiff_->matchCount / coloristImageDiff_->pixelCount));
+        appendInfo("Under Threshold: %7d (%.1f%%)",
+                   coloristImageDiff_->underThresholdCount,
+                   (100.0f * (float)coloristImageDiff_->underThresholdCount / coloristImageDiff_->pixelCount));
+        appendInfo("Over Threshold : %7d (%.1f%%)",
+                   coloristImageDiff_->overThresholdCount,
+                   (100.0f * (float)coloristImageDiff_->overThresholdCount / coloristImageDiff_->pixelCount));
     }
 }
 
@@ -820,14 +866,13 @@ void Vantage::render()
         cb.transform *= XMMatrixScaling(imageW * scaleX, imageH * scaleY, 1.0f);
         cb.transform *= XMMatrixTranslation(imagePosX_, imagePosY_, 0.0f);
         cb.transform *= XMMatrixOrthographicOffCenterRH(0.0f, clientW, clientH, 0.0f, -1.0f, 1.0f);
-        cb.params = XMFLOAT4(
-            1.0f, // hdrActive_ ? 1.0f : 0.0f,
-            0.0f, // forceSDR_ ? 1.0f : 0.0f,
-            0.0f, // tonemap_ ? 1.0f : 0.0f,
-            0);
+        cb.params = XMFLOAT4(1.0f, // hdrActive_ ? 1.0f : 0.0f,
+                             0.0f, // forceSDR_ ? 1.0f : 0.0f,
+                             0.0f, // tonemap_ ? 1.0f : 0.0f,
+                             0);
         context_->UpdateSubresource(constantBuffer_, 0, nullptr, &cb, 0, 0);
 
-        UINT stride = sizeof( SimpleVertex );
+        UINT stride = sizeof(SimpleVertex);
         UINT offset = 0;
         context_->IASetVertexBuffers(0, 1, &vertexBuffer_, &stride, &offset);
         context_->IASetInputLayout(vertexLayout_);
@@ -859,7 +904,6 @@ void Vantage::render()
     int64_t now = GetTickCount();
     int64_t dt = now - overlayTick_;
     if ((!overlay_.empty() || !info_.empty()) && (dt < overlayDuration_)) {
-
         const float infoW = 360.0f;
         float left = (clientW - infoW);
         float top = 10.0f;
@@ -874,13 +918,12 @@ void Vantage::render()
             cb.transform *= XMMatrixScaling(blackW, blackH, 1.0f);
             cb.transform *= XMMatrixTranslation(left, 0, 0.0f);
             cb.transform *= XMMatrixOrthographicOffCenterRH(0.0f, clientW, clientH, 0.0f, -1.0f, 1.0f);
-            cb.params = XMFLOAT4(
-                1.0f, // hdrActive_ ? 1.0f : 0.0f,
-                0.0f, // forceSDR_ ? 1.0f : 0.0f,
-                0.0f, // tonemap_ ? 1.0f : 0.0f,
-                0);
+            cb.params = XMFLOAT4(1.0f, // hdrActive_ ? 1.0f : 0.0f,
+                                 0.0f, // forceSDR_ ? 1.0f : 0.0f,
+                                 0.0f, // tonemap_ ? 1.0f : 0.0f,
+                                 0);
             context_->UpdateSubresource(constantBuffer_, 0, nullptr, &cb, 0, 0);
-            UINT stride = sizeof( SimpleVertex );
+            UINT stride = sizeof(SimpleVertex);
             UINT offset = 0;
             context_->IASetVertexBuffers(0, 1, &vertexBuffer_, &stride, &offset);
             context_->IASetInputLayout(vertexLayout_);

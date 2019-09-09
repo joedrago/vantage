@@ -1,11 +1,18 @@
+// ---------------------------------------------------------------------------
+//                         Copyright Joe Drago 2019.
+//         Distributed under the Boost Software License, Version 1.0.
+//            (See accompanying file LICENSE_1_0.txt or copy at
+//                  http://www.boost.org/LICENSE_1_0.txt)
+// ---------------------------------------------------------------------------
+
 #include "vantage.h"
 
-#include "vertexShader.h"
-#include "pixelShader.h"
 #include "fontSmall.h"
+#include "pixelShader.h"
+#include "vertexShader.h"
 
-#include <locale>
 #include <codecvt>
+#include <locale>
 
 static bool GetPathInfo(HMONITOR monitor, DISPLAYCONFIG_PATH_INFO * path_info)
 {
@@ -23,17 +30,17 @@ static bool GetPathInfo(HMONITOR monitor, DISPLAYCONFIG_PATH_INFO * path_info)
 
     // Get all path infos.
     do {
-        if (GetDisplayConfigBufferSizes(
-                QDC_ONLY_ACTIVE_PATHS, &num_path_array_elements,
-                &num_mode_info_array_elements) != ERROR_SUCCESS)
-        {
+        if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &num_path_array_elements, &num_mode_info_array_elements) != ERROR_SUCCESS) {
             return false;
         }
         path_infos.resize(num_path_array_elements);
         mode_infos.resize(num_mode_info_array_elements);
-        result = QueryDisplayConfig(
-            QDC_ONLY_ACTIVE_PATHS, &num_path_array_elements, path_infos.data(),
-            &num_mode_info_array_elements, mode_infos.data(), nullptr);
+        result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS,
+                                    &num_path_array_elements,
+                                    path_infos.data(),
+                                    &num_mode_info_array_elements,
+                                    mode_infos.data(),
+                                    nullptr);
     } while (result == ERROR_INSUFFICIENT_BUFFER);
 
     // Iterate of the path infos and see if we find one with a matching name.
@@ -93,16 +100,14 @@ HRESULT Vantage::createDevice()
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
-    D3D_DRIVER_TYPE driverTypes[] =
-    {
+    D3D_DRIVER_TYPE driverTypes[] = {
         D3D_DRIVER_TYPE_HARDWARE,
         D3D_DRIVER_TYPE_WARP,
         D3D_DRIVER_TYPE_REFERENCE,
     };
     UINT numDriverTypes = ARRAYSIZE(driverTypes);
 
-    D3D_FEATURE_LEVEL featureLevels[] =
-    {
+    D3D_FEATURE_LEVEL featureLevels[] = {
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
         D3D_FEATURE_LEVEL_10_1,
@@ -112,11 +117,29 @@ HRESULT Vantage::createDevice()
 
     for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++) {
         driverType_ = driverTypes[driverTypeIndex];
-        hr = D3D11CreateDevice(nullptr, driverType_, nullptr, createDeviceFlags, featureLevels, numFeatureLevels, D3D11_SDK_VERSION, &device_, &featureLevel_, &context_);
+        hr = D3D11CreateDevice(nullptr,
+                               driverType_,
+                               nullptr,
+                               createDeviceFlags,
+                               featureLevels,
+                               numFeatureLevels,
+                               D3D11_SDK_VERSION,
+                               &device_,
+                               &featureLevel_,
+                               &context_);
 
         if (hr == E_INVALIDARG) {
             // DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 so we need to retry without it
-            hr = D3D11CreateDevice(nullptr, driverType_, nullptr, createDeviceFlags, &featureLevels[1], numFeatureLevels - 1, D3D11_SDK_VERSION, &device_, &featureLevel_, &context_);
+            hr = D3D11CreateDevice(nullptr,
+                                   driverType_,
+                                   nullptr,
+                                   createDeviceFlags,
+                                   &featureLevels[1],
+                                   numFeatureLevels - 1,
+                                   D3D11_SDK_VERSION,
+                                   &device_,
+                                   &featureLevel_,
+                                   &context_);
         }
 
         if (SUCCEEDED(hr))
@@ -212,8 +235,7 @@ HRESULT Vantage::createDevice()
     }
 
     // Define the input layout
-    D3D11_INPUT_ELEMENT_DESC layout[] =
-    {
+    D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
@@ -245,8 +267,7 @@ HRESULT Vantage::createDevice()
     }
 
     // Create vertex buffer
-    SimpleVertex vertices[] =
-    {
+    SimpleVertex vertices[] = {
         { XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(0.0f, 0.0f) },
         { XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT2(1.0f, 0.0f) },
         { XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT2(1.0f, 1.0f) },
@@ -256,7 +277,7 @@ HRESULT Vantage::createDevice()
     D3D11_BUFFER_DESC bd;
     ZeroMemory(&bd, sizeof(bd));
     bd.Usage = D3D11_USAGE_DEFAULT;
-    bd.ByteWidth = sizeof( SimpleVertex ) * 4;
+    bd.ByteWidth = sizeof(SimpleVertex) * 4;
     bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     bd.CPUAccessFlags = 0;
     D3D11_SUBRESOURCE_DATA InitData;
@@ -269,14 +290,12 @@ HRESULT Vantage::createDevice()
 
     // Create index buffer
     // Create vertex buffer
-    WORD indices[] =
-    {
-        0, 1, 2,
-        0, 2, 3,
+    WORD indices[] = {
+        0, 1, 2, 0, 2, 3,
     };
 
     bd.Usage = D3D11_USAGE_DEFAULT;
-    bd.ByteWidth = sizeof( WORD ) * 6;
+    bd.ByteWidth = sizeof(WORD) * 6;
     bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
     bd.CPUAccessFlags = 0;
     InitData.pSysMem = indices;
@@ -457,7 +476,7 @@ void Vantage::resizeSwapChain(bool initializing)
 
     // Create a render target view
     ID3D11Texture2D * pBackBuffer = nullptr;
-    HRESULT hr = swapChain_->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void **>( &pBackBuffer ));
+    HRESULT hr = swapChain_->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void **>(&pBackBuffer));
     if (FAILED(hr)) {
         return;
     }
@@ -513,7 +532,8 @@ void Vantage::checkHDR()
         IDXGISwapChain3 * swapChain3 = nullptr;
         HRESULT hr = swapChain_->QueryInterface(IID_PPV_ARGS(&swapChain3));
         if (SUCCEEDED(hr)) {
-            DXGI_COLOR_SPACE_TYPE colorSpaceType = (hdrActive_) ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+            DXGI_COLOR_SPACE_TYPE colorSpaceType = (hdrActive_) ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+                                                                : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
             swapChain3->SetColorSpace1(colorSpaceType);
             swapChain3->Release();
         }
@@ -535,7 +555,7 @@ void Vantage::beginText()
 
 void Vantage::drawText(const char * text, float x, float y, float lum, float r, float g, float b, float a)
 {
-    std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     std::wstring output = converter.from_bytes(text);
 
     const float shadowOffset = 2.0f;

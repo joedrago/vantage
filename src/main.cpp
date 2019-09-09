@@ -1,3 +1,10 @@
+// ---------------------------------------------------------------------------
+//                         Copyright Joe Drago 2019.
+//         Distributed under the Boost Software License, Version 1.0.
+//            (See accompanying file LICENSE_1_0.txt or copy at
+//                  http://www.boost.org/LICENSE_1_0.txt)
+// ---------------------------------------------------------------------------
+
 // This began life as Tutorial07 from MSDN.
 // MS has copyrights on whatever subset of this code still somewhat looks like theirs.
 
@@ -5,8 +12,8 @@
 
 #include "vantage.h"
 
-#include <locale>
 #include <codecvt>
+#include <locale>
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -21,7 +28,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     std::wstring cmdLine = lpCmdLine;
     std::string filename1, filename2;
-    std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 
     if (numArgs > 1) {
         // Diff!
