@@ -1,3 +1,6 @@
 [submodule "ext/colorist"]
 	path = ext/colorist
 	url = https://github.com/joedrago/colorist.git
+[submodule "ext/dyn"]
+	path = ext/dyn
+	url = https://github.com/joedrago/dyn.git

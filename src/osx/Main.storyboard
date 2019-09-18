@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="14490.70" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" initialViewController="B8D-0N-5wS">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="14868" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" initialViewController="B8D-0N-5wS">
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="14490.70"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="14868"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -87,24 +87,163 @@
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <menu key="submenu" title="View" id="HyV-fh-RgO">
                                     <items>
-                                        <menuItem title="Toggle HDR" keyEquivalent="t" id="4J7-dP-txa">
+                                        <menuItem title="Reset Image Position" keyEquivalent="r" id="Zyc-Sd-XBj">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
-                                                <action selector="toggleHDR:" target="Ady-hI-5gd" id="YfE-Ve-by6"/>
+                                                <action selector="resetImagePosition:" target="Ady-hI-5gd" id="ZMW-ji-3g2"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Toggle SRGB Highlight" keyEquivalent="s" id="P3k-gl-1Wk">
+                                        <menuItem isSeparatorItem="YES" id="OYg-LG-JTZ"/>
+                                        <menuItem title="Previous Image" keyEquivalent="" id="fQc-qB-o6Z">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
-                                                <action selector="toggleSRGBHighlight:" target="Ady-hI-5gd" id="8rh-EP-cLx"/>
+                                                <action selector="previousImage:" target="Ady-hI-5gd" id="e3e-h6-Sbp"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Next Image" keyEquivalent="" id="mBn-pl-uGJ">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="nextImage:" target="Ady-hI-5gd" id="o9P-zU-2Jf"/>
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="0iX-Rs-Ty6"/>
+                                        <menuItem title="Toggle SRGB Highlight" keyEquivalent="s" id="P3k-gl-1Wk">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="toggleSRGB:" target="Ady-hI-5gd" id="Sji-NG-1oP"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="Lte-ah-oRP"/>
+                                        <menuItem title="Show Overlay" keyEquivalent=" " id="Yzj-FU-kWU">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="showOverlay:" target="Ady-hI-5gd" id="jAC-BL-FrW"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Hide Overlay" keyEquivalent=" " id="Wxz-zt-0sK">
+                                            <modifierMask key="keyEquivalentModifierMask" control="YES"/>
+                                            <connections>
+                                                <action selector="hideOverlay:" target="Ady-hI-5gd" id="Ag0-om-BQ8"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="kb8-cY-RaZ"/>
                                         <menuItem title="Enter Full Screen" keyEquivalent="f" id="IE3-rZ-kWC">
                                             <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
                                             <connections>
                                                 <action selector="toggleFullScreen:" target="Ady-hI-5gd" id="J1d-0h-p5y"/>
                                             </connections>
                                         </menuItem>
+                                        <menuItem title="Toggle HDR" keyEquivalent="h" id="4J7-dP-txa">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="toggleHDR:" target="Ady-hI-5gd" id="YfE-Ve-by6"/>
+                                            </connections>
+                                        </menuItem>
                                     </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem title="Diff" id="DxR-Xh-YRm">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Diff" id="uOx-dp-v7g">
+                                    <items>
+                                        <menuItem title="Diff Current Image Against..." keyEquivalent="d" id="c1o-Pm-4iP">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="diffCurrentImageAgainst:" target="Ady-hI-5gd" id="G7V-xO-x5e"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="p1F-lf-9DA"/>
+                                        <menuItem title="Show Image 1" keyEquivalent="1" id="9U5-4a-YWg">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="showImage1:" target="Ady-hI-5gd" id="WgH-Mz-g9z"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Show Image 2" keyEquivalent="2" id="z35-74-W4b">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="showImage2:" target="Ady-hI-5gd" id="Imz-HP-gN1"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Show Diff" keyEquivalent="3" id="ufu-IM-90o">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="showDiff:" target="Ady-hI-5gd" id="ySQ-1W-jDg"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="yad-r1-9Nz"/>
+                                        <menuItem title="Adjust Threshold -1" keyEquivalent="" id="AMH-Dx-opP">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdM1:" target="Ady-hI-5gd" id="Fk9-WL-T6M"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Adjust Threshold -5" keyEquivalent="" id="ecU-VK-I9b">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdM5:" target="Ady-hI-5gd" id="6cD-ST-H2M"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Adjust Threshold -50" keyEquivalent="" id="YyP-dI-bLn">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdM50:" target="Ady-hI-5gd" id="QYV-aN-xUR"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Adjust Threshold -500" keyEquivalent="" id="Q6a-zq-CKU">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdM500:" target="Ady-hI-5gd" id="awz-qk-ib1"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="NQB-cM-5aT"/>
+                                        <menuItem title="Diff Intensity: Original" keyEquivalent="z" id="xfg-1n-ufX">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="diffIntensityOriginal:" target="Ady-hI-5gd" id="BmC-c1-VzZ"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Diff Intensity: Bright" keyEquivalent="x" id="8Ag-KA-iwZ">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="diffIntensityBright:" target="Ady-hI-5gd" id="P5E-og-s8X"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Diff Intensity: Diff Only" keyEquivalent="c" id="zxz-MR-UD6">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="diffIntensityDiffOnly:" target="Ady-hI-5gd" id="D6L-G5-rkT"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="gXR-Gy-VjK"/>
+                                        <menuItem title="Adjust Threshold +1" keyEquivalent="" id="QjS-ri-gCA">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdP1:" target="Ady-hI-5gd" id="ADB-md-nAt"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Adjust Threshold +5" id="MXf-t5-Ek9">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdP5:" target="Ady-hI-5gd" id="05s-xR-eVL"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Adjust Threshold +50" keyEquivalent="" id="rtD-Uf-ITm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdP50:" target="Ady-hI-5gd" id="z9i-oA-Dpa"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Adjust Threshold +500" keyEquivalent="" id="f4f-x7-5TG">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="adjustThresholdP500:" target="Ady-hI-5gd" id="57C-4L-TuX"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                    <connections>
+                                        <outlet property="delegate" destination="Voe-Tx-rLC" id="wlO-yY-3vb"/>
+                                    </connections>
                                 </menu>
                             </menuItem>
                             <menuItem title="Window" id="aUF-d1-5bR">

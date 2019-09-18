@@ -31,15 +31,18 @@ if(WIN32)
     )
 
     include_directories(
+        src/common
         src/win32
-        fonts
         ${CMAKE_BINARY_DIR}
+        ${CMAKE_SOURCE_DIR}/ext/dyn/src
         ${CMAKE_SOURCE_DIR}/ext/colorist/lib/include
-        ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Inc
     )
     add_executable(vantage WIN32
-        res/small.ico
-        res/vantage.ico
+        src/common/mono.c
+        src/common/vantage.c
+        src/common/vantage.h
+
+        src/win32/res/vantage.ico
 
         ${CMAKE_BINARY_DIR}/vertexShader.h
         ${CMAKE_BINARY_DIR}/pixelShader.h
@@ -48,31 +51,25 @@ if(WIN32)
         src/win32/resource.h
         src/win32/targetver.h
         src/win32/vantage.rc
-        src/win32/vantage.h
-
-        src/win32/vantage.cpp
-        src/win32/vantage_d3d.cpp
-        src/win32/vantage_image.cpp
-        src/win32/vantage_win.cpp
-
-        # DirectXTK
-        ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/BinaryReader.cpp
-        ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/CommonStates.cpp
-        ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/SpriteBatch.cpp
-        ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/SpriteFont.cpp
-        ${CMAKE_SOURCE_DIR}/ext/DirectXTK/Src/VertexTypes.cpp
     )
-    target_link_libraries(vantage colorist)
+    target_link_libraries(vantage dyn colorist)
 endif()
 
 if(APPLE)
     include_directories(
+        src/common
         ${CMAKE_BINARY_DIR}
+        ${CMAKE_SOURCE_DIR}/ext/dyn/src
         ${CMAKE_SOURCE_DIR}/ext/colorist/lib/include
     )
 
     add_executable(
         Vantage MACOSX_BUNDLE
+
+        src/common/mono.c
+        src/common/vantage.c
+        src/common/vantage.h
+
         src/osx/AppDelegate.m
         src/osx/GameViewController.m
         src/osx/main.m
@@ -99,7 +96,7 @@ if(APPLE)
         ${CMAKE_CURRENT_LIST_DIR}/src/osx/Info.plist
     )
 
-    target_link_libraries(Vantage colorist)
+    target_link_libraries(Vantage dyn colorist)
 
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} \
       -framework AppKit \

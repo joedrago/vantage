@@ -1,9 +1,5 @@
-// ---------------------------------------------------------------------------
-//                         Copyright Joe Drago 2019.
-//         Distributed under the Boost Software License, Version 1.0.
-//            (See accompanying file LICENSE_1_0.txt or copy at
-//                  http://www.boost.org/LICENSE_1_0.txt)
-// ---------------------------------------------------------------------------
+// Copyright 2019 Joe Drago. All rights reserved.
+// SPDX-License-Identifier: BSD-2-Clause
 
 #import <ModelIO/ModelIO.h>
 #import <simd/simd.h>
@@ -11,320 +7,170 @@
 #import "Renderer.h"
 #import "ShaderTypes.h"
 #import "VantageView.h"
+#import "vantage.h"
 
 #import "colorist/colorist.h"
 
 static const NSUInteger kMaxBuffersInFlight = 3;
 
-static const size_t kAlignedUniformsSize = (sizeof(Uniforms) & ~0xFF) + 0x100;
-
 @implementation Renderer {
-    dispatch_semaphore_t _inFlightSemaphore;
-    id<MTLDevice> _device;
-    id<MTLCommandQueue> _commandQueue;
+    // Vantage
+    VantageView * view_;
+    Vantage * V;
 
-    id<MTLBuffer> _dynamicUniformBuffer;
-    id<MTLRenderPipelineState> _pipelineState;
-    id<MTLDepthStencilState> _depthState;
-    id<MTLTexture> _mtlImage;
-    MTLVertexDescriptor * _mtlVertexDescriptor;
+    // Renderer state
+    CGSize windowSize_;
+    bool hdrActive_; // This should be auto-detected in the future
 
-    uint32_t _uniformBufferOffset;
+    // Metal
+    dispatch_semaphore_t inFlightSemaphore_;
+    id<MTLDevice> device_;
+    id<MTLCommandQueue> commandQueue_;
+    id<MTLRenderPipelineState> pipelineState_;
+    id<MTLTexture> metalPreparedImage_;
+    id<MTLTexture> metalFontImage_;
+    id<MTLTexture> metalFillImage_;
+    id<MTLBuffer> vertices_;
+    NSUInteger vertexCount_;
 
-    uint8_t _uniformBufferIndex;
-
-    void * _uniformBufferAddress;
-
-    matrix_float4x4 _projectionMatrix;
-
-    CGSize _dimensions;
-
-    MTKMesh * _mesh;
-    VantageView * _view;
-
-    bool _hdrActive;
-    bool _srgbHighlight;
-    NSString * _imagePath;
+    // Awful hacks, don't look at this!
+    bool windowTitleSet_;
 }
 
-// - (void)mouseDragged:(NSEvent *)event
-// {
-//     NSPoint eventLocation = [event mouseLocation];
-// }
-
-- (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)view
+- (nonnull instancetype)initMetal:(nonnull MTKView *)view
 {
     self = [super init];
-    if (self) {
-        _device = view.device;
-        _inFlightSemaphore = dispatch_semaphore_create(kMaxBuffersInFlight);
-        _view = (VantageView *)view;
-        _hdrActive = false;
-        _srgbHighlight = false;
-        _imagePath = nil;
-        [self _loadMetalWithView:view];
-        [self _loadAssets];
-        [self _prepareNotifications];
+    if (!self) {
+        return self;
     }
 
-    return self;
-}
+    // --------------------------------------------------------------------------------------------
+    // Stash off values
 
-- (void)_loadMetalWithView:(nonnull MTKView *)view
-{
-    /// Load Metal state objects and initalize renderer dependent view properties
+    view_ = (VantageView *)view;
+    device_ = view_.device;
+    windowTitleSet_ = false;
+
+    // --------------------------------------------------------------------------------------------
+    // Init Vantage
+
+    V = view_.V;
+    vantagePlatformSetWhiteLevel(V, 100);
+    vantagePlatformSetUsesLinear(V, 1);
+
+    // TODO: get from OS, react when it changes
+    hdrActive_ = true;
+    [self toggleHDR:nil];
+
+    // --------------------------------------------------------------------------------------------
+    // Init Metal
+
+    inFlightSemaphore_ = dispatch_semaphore_create(kMaxBuffersInFlight);
 
     CAMetalLayer * metalLayer = (CAMetalLayer *)view.layer;
     metalLayer.wantsExtendedDynamicRangeContent = YES;
     metalLayer.pixelFormat = MTLPixelFormatRGBA16Float;
-
-    view.depthStencilPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
-    view.colorPixelFormat = MTLPixelFormatRGBA16Float; //MTLPixelFormatBGRA8Unorm_sRGB;
+    view.colorPixelFormat = MTLPixelFormatRGBA16Float;
     view.sampleCount = 1;
 
-    _mtlVertexDescriptor = [[MTLVertexDescriptor alloc] init];
-
-    _mtlVertexDescriptor.attributes[VertexAttributePosition].format = MTLVertexFormatFloat3;
-    _mtlVertexDescriptor.attributes[VertexAttributePosition].offset = 0;
-    _mtlVertexDescriptor.attributes[VertexAttributePosition].bufferIndex = BufferIndexMeshPositions;
-
-    _mtlVertexDescriptor.attributes[VertexAttributeTexcoord].format = MTLVertexFormatFloat2;
-    _mtlVertexDescriptor.attributes[VertexAttributeTexcoord].offset = 0;
-    _mtlVertexDescriptor.attributes[VertexAttributeTexcoord].bufferIndex = BufferIndexMeshGenerics;
-
-    _mtlVertexDescriptor.layouts[BufferIndexMeshPositions].stride = 12;
-    _mtlVertexDescriptor.layouts[BufferIndexMeshPositions].stepRate = 1;
-    _mtlVertexDescriptor.layouts[BufferIndexMeshPositions].stepFunction = MTLVertexStepFunctionPerVertex;
-
-    _mtlVertexDescriptor.layouts[BufferIndexMeshGenerics].stride = 8;
-    _mtlVertexDescriptor.layouts[BufferIndexMeshGenerics].stepRate = 1;
-    _mtlVertexDescriptor.layouts[BufferIndexMeshGenerics].stepFunction = MTLVertexStepFunctionPerVertex;
-
-    id<MTLLibrary> defaultLibrary = [_device newDefaultLibrary];
-
+    id<MTLLibrary> defaultLibrary = [device_ newDefaultLibrary];
     id<MTLFunction> vertexFunction = [defaultLibrary newFunctionWithName:@"vertexShader"];
-
     id<MTLFunction> fragmentFunction = [defaultLibrary newFunctionWithName:@"fragmentShader"];
 
     MTLRenderPipelineDescriptor * pipelineStateDescriptor = [[MTLRenderPipelineDescriptor alloc] init];
-    pipelineStateDescriptor.label = @"MyPipeline";
-    pipelineStateDescriptor.sampleCount = view.sampleCount;
+    pipelineStateDescriptor.label = @"Vantage Pipeline";
     pipelineStateDescriptor.vertexFunction = vertexFunction;
     pipelineStateDescriptor.fragmentFunction = fragmentFunction;
-    pipelineStateDescriptor.vertexDescriptor = _mtlVertexDescriptor;
     pipelineStateDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat;
-    pipelineStateDescriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat;
-    pipelineStateDescriptor.stencilAttachmentPixelFormat = view.depthStencilPixelFormat;
+    pipelineStateDescriptor.colorAttachments[0].blendingEnabled = YES;
+    pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+    pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+    pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+    pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+    pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
 
     NSError * error = NULL;
-    _pipelineState = [_device newRenderPipelineStateWithDescriptor:pipelineStateDescriptor error:&error];
-    if (!_pipelineState) {
-        NSLog(@"Failed to created pipeline state, error %@", error);
-    }
+    pipelineState_ = [device_ newRenderPipelineStateWithDescriptor:pipelineStateDescriptor error:&error];
+    NSAssert(pipelineState_, @"Failed to created pipeline state, error %@", error);
 
-    MTLDepthStencilDescriptor * depthStateDesc = [[MTLDepthStencilDescriptor alloc] init];
-    depthStateDesc.depthCompareFunction = MTLCompareFunctionAlways; //MTLCompareFunctionLess;
-    depthStateDesc.depthWriteEnabled = NO;
-    _depthState = [_device newDepthStencilStateWithDescriptor:depthStateDesc];
+    commandQueue_ = [device_ newCommandQueue];
 
-    NSUInteger uniformBufferSize = kAlignedUniformsSize * kMaxBuffersInFlight;
+    // clang-format off
+    static const VantageVertex rawVertices[] =
+    {
+        { { 0.0f,  1.0f },  { 0.f, 1.f } },
+        { { 1.0f,  1.0f },  { 1.f, 1.f } },
+        { { 1.0f,  0.0f },  { 1.f, 0.f } },
 
-    _dynamicUniformBuffer = [_device newBufferWithLength:uniformBufferSize options:MTLResourceStorageModeShared];
+        { { 0.0f,  1.0f },  { 0.f, 1.f } },
+        { { 1.0f,  0.0f },  { 1.f, 0.f } },
+        { { 0.0f,  0.0f },  { 0.f, 0.f } },
+    };
+    // clang-format on
 
-    _dynamicUniformBuffer.label = @"UniformBuffer";
+    vertices_ = [device_ newBufferWithBytes:rawVertices length:sizeof(rawVertices) options:MTLResourceStorageModeShared];
+    vertexCount_ = sizeof(rawVertices) / sizeof(VantageVertex);
 
-    _commandQueue = [_device newCommandQueue];
-
-    [self _toggleHDR];
-}
-
-- (void)_reload
-{
-    if (_imagePath != nil) {
-        [self loadImage:_imagePath diff:nil];
-    }
-    [self updateTitle];
-}
-
-- (void)_toggleHDR
-{
-    _hdrActive = !_hdrActive;
-
-    CAMetalLayer * metalLayer = (CAMetalLayer *)_view.layer;
-    CGColorSpaceRef colorspace;
-    if (_hdrActive) {
-        colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
-    } else {
-        colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    }
-    metalLayer.colorspace = colorspace;
-    CGColorSpaceRelease(colorspace);
-
-    [self _reload];
-}
-
-- (void)_loadAssets
-{
-    /// Load assets into metal objects
-
-    NSError * error = NULL;
-
-    MTKMeshBufferAllocator * metalAllocator = [[MTKMeshBufferAllocator alloc] initWithDevice:_device];
-
-    MDLMesh * mdlMesh = [MDLMesh newBoxWithDimensions:(vector_float3) { 2.0f, 2.0f, 0.1f }
-                                             segments:(vector_uint3) { 1, 1, 1 }
-                                         geometryType:MDLGeometryTypeTriangles
-                                        inwardNormals:NO
-                                            allocator:metalAllocator];
-
-    MDLVertexDescriptor * mdlVertexDescriptor = MTKModelIOVertexDescriptorFromMetal(_mtlVertexDescriptor);
-
-    mdlVertexDescriptor.attributes[VertexAttributePosition].name = MDLVertexAttributePosition;
-    mdlVertexDescriptor.attributes[VertexAttributeTexcoord].name = MDLVertexAttributeTextureCoordinate;
-
-    mdlMesh.vertexDescriptor = mdlVertexDescriptor;
-
-    _mesh = [[MTKMesh alloc] initWithMesh:mdlMesh device:_device error:&error];
-
-    if (!_mesh || error) {
-        NSLog(@"Error creating MetalKit mesh %@", error.localizedDescription);
-    }
-
-    _mtlImage = nil;
-}
-
-- (void)loadImage:(nonnull NSString *)path diff:(nullable NSString *)diffPath
-{
-    clContext * C = clContextCreate(NULL);
-    C->defaultLuminance = 100; // It seems that Apple uses 100 nits as their gfx white
-
-    clImage * loadedImage = clContextRead(C, [path UTF8String], NULL, NULL);
-
-    if (loadedImage && _srgbHighlight) {
-        clImageSRGBHighlightStats stats;
-        clImage * highlight = clImageCreateSRGBHighlight(C, loadedImage, C->defaultLuminance, &stats, NULL, NULL);
-        if (highlight) {
-            clImageDestroy(C, loadedImage);
-            loadedImage = highlight;
-        }
-    }
-
-    if (loadedImage) {
-        int sdrWhite = 80;
-
-        clProfilePrimaries primaries;
-        clProfileCurve curve;
-
-        int dstLuminance = 10000;
-        if (_hdrActive) {
-            clContextGetStockPrimaries(C, "bt2020", &primaries);
-            curve.type = CL_PCT_GAMMA;
-            curve.implicitScale = 1.0f;
-            curve.gamma = 1.0f;
-            dstLuminance = 10000;
-            // imageWhiteLevel_ = sdrWhite;
-            // imageHDR_ = true;
-        } else {
-            clContextGetStockPrimaries(C, "bt709", &primaries);
-            curve.type = CL_PCT_GAMMA;
-            curve.implicitScale = 1.0f;
-            curve.gamma = 2.2f;
-            dstLuminance = sdrWhite;
-            // imageWhiteLevel_ = sdrWhite;
-            // imageHDR_ = false;
-        }
-        clProfile * profile = clProfileCreate(C, &primaries, &curve, dstLuminance, NULL);
-        clImage * convertedImage = clImageConvert(C, loadedImage, C->params.jobs, 16, profile, CL_TONEMAP_AUTO);
-        clProfileDestroy(C, profile);
-
-        clImageDestroy(C, loadedImage);
-        loadedImage = convertedImage;
+    {
+        uint32_t fillContent = 0xffffffff;
 
         MTLTextureDescriptor * textureDescriptor = [[MTLTextureDescriptor alloc] init];
+        textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
+        textureDescriptor.width = 1;
+        textureDescriptor.height = 1;
 
-        // Indicate that each pixel has a blue, green, red, and alpha channel, where each channel is
-        // an 8-bit unsigned normalized value (i.e. 0 maps to 0.0 and 255 maps to 1.0)
-        textureDescriptor.pixelFormat = MTLPixelFormatRGBA16Unorm;
-
-        // Set the pixel dimensions of the texture
-        textureDescriptor.width = loadedImage->width;
-        textureDescriptor.height = loadedImage->height;
-
-        // Create the texture from the device by using the descriptor
-        _mtlImage = [_device newTextureWithDescriptor:textureDescriptor];
-
-        // if(!_mtlImage || error)
-        // {
-        //     NSLog(@"Error creating texture %@", error.localizedDescription);
-        // }
-
+        metalFillImage_ = [device_ newTextureWithDescriptor:textureDescriptor];
         MTLRegion region = MTLRegionMake2D(0, 0, textureDescriptor.width, textureDescriptor.height);
-        [_mtlImage replaceRegion:region
-                     mipmapLevel:0
-                           slice:0
-                       withBytes:loadedImage->pixels
-                     bytesPerRow:8 * loadedImage->width
-                   bytesPerImage:0];
-
-        clImageDestroy(C, loadedImage);
-
-        _imagePath = [[NSString alloc] initWithString:path];
-    } else {
-        _mtlImage = nil;
-        _imagePath = nil;
+        [metalFillImage_ replaceRegion:region mipmapLevel:0 slice:0 withBytes:&fillContent bytesPerRow:4 bytesPerImage:0];
     }
-    clContextDestroy(C);
 
-    [self updateTitle];
+    {
+        MTLTextureDescriptor * textureDescriptor = [[MTLTextureDescriptor alloc] init];
+        textureDescriptor.pixelFormat = MTLPixelFormatRGBA16Unorm;
+        textureDescriptor.width = V->imageFont_->width;
+        textureDescriptor.height = V->imageFont_->height;
+
+        metalFontImage_ = [device_ newTextureWithDescriptor:textureDescriptor];
+        MTLRegion region = MTLRegionMake2D(0, 0, textureDescriptor.width, textureDescriptor.height);
+        [metalFontImage_ replaceRegion:region
+                           mipmapLevel:0
+                                 slice:0
+                             withBytes:V->imageFont_->pixels
+                           bytesPerRow:8 * V->imageFont_->width
+                         bytesPerImage:0];
+    }
+
+    [self _prepareNotifications];
+    return self;
 }
 
-- (void)updateTitle
+- (void)_prepareNotifications
 {
-    NSMutableString * newTitle = [[NSMutableString alloc] initWithUTF8String:"Vantage"];
-    if (_imagePath) {
-        [newTitle appendString:@" - "];
-        [newTitle appendString:_imagePath];
-    }
-    if (_srgbHighlight) {
-        [newTitle appendString:@" (SRGB Highlight @ 100 nits)"];
-    } else {
-        if (_hdrActive) {
-            [newTitle appendString:@" (HDR Render)"];
-        } else {
-            [newTitle appendString:@" (SDR Render)"];
-        }
-    }
-    _view.window.title = newTitle;
-}
-
-#if 0
-- (bool)keyUp:(nonnull NSEvent *)event
-{
-    if ([event modifierFlags] & NSEventModifierFlagNumericPad) { // arrow keys have this mask
-        NSString * theArrow = [event charactersIgnoringModifiers];
-        unichar keyChar = 0;
-        if ([theArrow length] == 0)
-            return false;
-        if ([theArrow length] == 1) {
-            if (keyChar == NSUpArrowFunctionKey) {
-                [self _toggleHDR];
-                return true;
-            }
-        }
-    }
-    return false;
-}
-#endif
-
-- (void)toggleHDR:(NSNotification *)notification
-{
-    [self _toggleHDR];
-}
-
-- (void)toggleSRGBHighlight:(NSNotification *)notification
-{
-    _srgbHighlight = !_srgbHighlight;
-    [self _reload];
+    NSNotificationCenter * center = [NSNotificationCenter defaultCenter];
+    [center addObserver:self selector:@selector(openDocument:) name:@"openDocument" object:nil];
+    [center addObserver:self selector:@selector(resetImagePosition:) name:@"resetImagePosition" object:nil];
+    [center addObserver:self selector:@selector(previousImage:) name:@"previousImage" object:nil];
+    [center addObserver:self selector:@selector(nextImage:) name:@"nextImage" object:nil];
+    [center addObserver:self selector:@selector(toggleSRGB:) name:@"toggleSRGB" object:nil];
+    [center addObserver:self selector:@selector(showOverlay:) name:@"showOverlay" object:nil];
+    [center addObserver:self selector:@selector(hideOverlay:) name:@"hideOverlay" object:nil];
+    [center addObserver:self selector:@selector(toggleHDR:) name:@"toggleHDR" object:nil];
+    [center addObserver:self selector:@selector(diffCurrentImageAgainst:) name:@"diffCurrentImageAgainst" object:nil];
+    [center addObserver:self selector:@selector(showImage1:) name:@"showImage1" object:nil];
+    [center addObserver:self selector:@selector(showImage2:) name:@"showImage2" object:nil];
+    [center addObserver:self selector:@selector(showDiff:) name:@"showDiff" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdM1:) name:@"adjustThresholdM1" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdM5:) name:@"adjustThresholdM5" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdM50:) name:@"adjustThresholdM50" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdM500:) name:@"adjustThresholdM500" object:nil];
+    [center addObserver:self selector:@selector(diffIntensityOriginal:) name:@"diffIntensityOriginal" object:nil];
+    [center addObserver:self selector:@selector(diffIntensityBright:) name:@"diffIntensityBright" object:nil];
+    [center addObserver:self selector:@selector(diffIntensityDiffOnly:) name:@"diffIntensityDiffOnly" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdP1:) name:@"adjustThresholdP1" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdP5:) name:@"adjustThresholdP5" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdP50:) name:@"adjustThresholdP50" object:nil];
+    [center addObserver:self selector:@selector(adjustThresholdP500:) name:@"adjustThresholdP500" object:nil];
 }
 
 - (void)openDocument:(NSNotification *)notification
@@ -345,6 +191,144 @@ static const size_t kAlignedUniformsSize = (sizeof(Uniforms) & ~0xFF) + 0x100;
     }
 }
 
+- (void)resetImagePosition:(NSNotification *)notification
+{
+    vantageResetImagePos(V);
+}
+
+- (void)previousImage:(NSNotification *)notification
+{
+    vantageLoad(V, -1);
+}
+
+- (void)nextImage:(NSNotification *)notification
+{
+    vantageLoad(V, 1);
+}
+
+- (void)toggleSRGB:(NSNotification *)notification
+{
+    vantageToggleSrgbHighlight(V);
+}
+
+- (void)showOverlay:(NSNotification *)notification
+{
+    vantageKickOverlay(V);
+}
+
+- (void)hideOverlay:(NSNotification *)notification
+{
+    vantageKillOverlay(V);
+}
+
+- (void)toggleHDR:(NSNotification *)notification
+{
+    hdrActive_ = !hdrActive_;
+
+    CAMetalLayer * metalLayer = (CAMetalLayer *)view_.layer;
+    CGColorSpaceRef colorspace;
+    if (hdrActive_) {
+        colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
+    } else {
+        colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    }
+    metalLayer.colorspace = colorspace;
+    CGColorSpaceRelease(colorspace);
+
+    vantagePlatformSetHDRActive(V, hdrActive_ ? 1 : 0);
+}
+
+- (void)diffCurrentImageAgainst:(NSNotification *)notification
+{
+    NSOpenPanel * openDlg = [NSOpenPanel openPanel];
+    [openDlg setCanChooseFiles:YES];
+    [openDlg setAllowsMultipleSelection:YES];
+    [openDlg setCanChooseDirectories:NO];
+    if ([openDlg runModal] == NSModalResponseOK) {
+        NSArray * urls = [openDlg URLs];
+        if ([urls count] > 0) {
+            NSString * fileScheme = @"file";
+            NSURL * url = [urls objectAtIndex:0];
+            if ([url.scheme isEqualToString:fileScheme]) {
+                char * currentFilename = NULL;
+                dsCopy(&currentFilename, V->filenames_[V->imageFileIndex_]);
+                vantageLoadDiff(V, currentFilename, [url.path UTF8String]);
+                dsDestroy(&currentFilename);
+            }
+        }
+    }
+}
+
+- (void)showImage1:(NSNotification *)notification
+{
+    vantageSetDiffMode(V, DIFFMODE_SHOW1);
+}
+
+- (void)showImage2:(NSNotification *)notification
+{
+    vantageSetDiffMode(V, DIFFMODE_SHOW2);
+}
+
+- (void)showDiff:(NSNotification *)notification
+{
+    vantageSetDiffMode(V, DIFFMODE_SHOWDIFF);
+}
+
+- (void)adjustThresholdM1:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, -1);
+}
+
+- (void)adjustThresholdM5:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, -5);
+}
+
+- (void)adjustThresholdM50:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, -50);
+}
+
+- (void)adjustThresholdM500:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, -500);
+}
+
+- (void)diffIntensityOriginal:(NSNotification *)notification
+{
+    vantageSetDiffIntensity(V, DIFFINTENSITY_ORIGINAL);
+}
+
+- (void)diffIntensityBright:(NSNotification *)notification
+{
+    vantageSetDiffIntensity(V, DIFFINTENSITY_BRIGHT);
+}
+
+- (void)diffIntensityDiffOnly:(NSNotification *)notification
+{
+    vantageSetDiffIntensity(V, DIFFINTENSITY_DIFFONLY);
+}
+
+- (void)adjustThresholdP1:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, 1);
+}
+
+- (void)adjustThresholdP5:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, 5);
+}
+
+- (void)adjustThresholdP50:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, 50);
+}
+
+- (void)adjustThresholdP500:(NSNotification *)notification
+{
+    vantageAdjustThreshold(V, 500);
+}
+
 - (void)openFile:(NSNotification *)notification
 {
     NSDictionary * userInfo = notification.userInfo;
@@ -354,213 +338,185 @@ static const size_t kAlignedUniformsSize = (sizeof(Uniforms) & ~0xFF) + 0x100;
     }
 }
 
-- (void)_prepareNotifications
+- (void)loadImage:(nonnull NSString *)path diff:(nullable NSString *)diffPath
 {
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openDocument:) name:@"openDocument" object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(toggleHDR:) name:@"toggleHDR" object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(toggleSRGBHighlight:)
-                                                 name:@"toggleSRGBHighlight"
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openFile:) name:@"openFile" object:nil];
-}
-
-- (void)_updateDynamicBufferState
-{
-    /// Update the state of our uniform buffers before rendering
-
-    _uniformBufferIndex = (_uniformBufferIndex + 1) % kMaxBuffersInFlight;
-
-    _uniformBufferOffset = kAlignedUniformsSize * _uniformBufferIndex;
-
-    _uniformBufferAddress = ((uint8_t *)_dynamicUniformBuffer.contents) + _uniformBufferOffset;
-}
-
-- (void)_updateGameState
-{
-    /// Update any game state before encoding renderint commands to our drawable
-
-    Uniforms * uniforms = (Uniforms *)_uniformBufferAddress;
-
-    uniforms->projectionMatrix = _projectionMatrix;
-
-    if ((_mtlImage != nil) && (_dimensions.width > 0) && (_dimensions.height > 0)) {
-        float viewAspectRatio = (float)_dimensions.width / (float)_dimensions.height;
-        float imageAspectRatio = (float)_mtlImage.width / (float)_mtlImage.height;
-        float scaleX = 1.0f;
-        float scaleY = 1.0f;
-        if (viewAspectRatio < imageAspectRatio) {
-            scaleY = viewAspectRatio / imageAspectRatio;
-        } else {
-            scaleX = imageAspectRatio / viewAspectRatio;
-        }
-        uniforms->modelViewMatrix = matrix4x4_2d(0.0, 0.0, scaleX, scaleY);
+    if (diffPath == nil) {
+        vantageFileListClear(V);
+        vantageFileListAppend(V, [path UTF8String]);
+        vantageLoad(V, 0);
     } else {
-        uniforms->modelViewMatrix = matrix4x4_2d(0.0, 0.0, 1.0, 1.0);
-    }
-    if (_hdrActive) {
-        uniforms->overrange = 100.0f;
-    } else {
-        uniforms->overrange = 1.0f;
+        vantageLoadDiff(V, [path UTF8String], [diffPath UTF8String]);
     }
 }
 
-- (void)drawInMTKView:(nonnull MTKView *)view
+- (void)mouseDown:(nonnull NSEvent *)event
 {
-    /// Per frame updates here
+    NSPoint eventLocation = [event locationInWindow];
+    int x = (int)eventLocation.x;
+    int y = windowSize_.height - (int)eventLocation.y;
+    vantageMouseLeftDown(V, x, y);
+}
 
-    dispatch_semaphore_wait(_inFlightSemaphore, DISPATCH_TIME_FOREVER);
+- (void)mouseUp:(nonnull NSEvent *)event
+{
+    NSPoint eventLocation = [event locationInWindow];
+    int x = (int)eventLocation.x;
+    int y = windowSize_.height - (int)eventLocation.y;
+    vantageMouseLeftUp(V, x, y);
 
-    id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
-    commandBuffer.label = @"MyCommand";
-
-    __block dispatch_semaphore_t block_sema = _inFlightSemaphore;
-    [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-      dispatch_semaphore_signal(block_sema);
-    }];
-
-    [self _updateDynamicBufferState];
-
-    [self _updateGameState];
-
-    /// Delay getting the currentRenderPassDescriptor until we absolutely need it to avoid
-    ///   holding onto the drawable and blocking the display pipeline any longer than necessary
-    MTLRenderPassDescriptor * renderPassDescriptor = view.currentRenderPassDescriptor;
-
-    if ((renderPassDescriptor != nil) && (_mtlImage != nil)) {
-        /// Final pass rendering code here
-
-        id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-        renderEncoder.label = @"MyRenderEncoder";
-
-        [renderEncoder pushDebugGroup:@"DrawBox"];
-
-        [renderEncoder setFrontFacingWinding:MTLWindingCounterClockwise];
-        [renderEncoder setCullMode:MTLCullModeBack];
-        [renderEncoder setRenderPipelineState:_pipelineState];
-        [renderEncoder setDepthStencilState:_depthState];
-
-        [renderEncoder setVertexBuffer:_dynamicUniformBuffer offset:_uniformBufferOffset atIndex:BufferIndexUniforms];
-
-        [renderEncoder setFragmentBuffer:_dynamicUniformBuffer offset:_uniformBufferOffset atIndex:BufferIndexUniforms];
-
-        for (NSUInteger bufferIndex = 0; bufferIndex < _mesh.vertexBuffers.count; bufferIndex++) {
-            MTKMeshBuffer * vertexBuffer = _mesh.vertexBuffers[bufferIndex];
-            if ((NSNull *)vertexBuffer != [NSNull null]) {
-                [renderEncoder setVertexBuffer:vertexBuffer.buffer offset:vertexBuffer.offset atIndex:bufferIndex];
-            }
-        }
-
-        [renderEncoder setFragmentTexture:_mtlImage atIndex:TextureIndexColor];
-
-        for (MTKSubmesh * submesh in _mesh.submeshes) {
-            [renderEncoder drawIndexedPrimitives:submesh.primitiveType
-                                      indexCount:submesh.indexCount
-                                       indexType:submesh.indexType
-                                     indexBuffer:submesh.indexBuffer.buffer
-                               indexBufferOffset:submesh.indexBuffer.offset];
-        }
-
-        [renderEncoder popDebugGroup];
-
-        [renderEncoder endEncoding];
-
-        [commandBuffer presentDrawable:view.currentDrawable];
+    NSInteger clickCount = [event clickCount];
+    if (clickCount > 1) {
+        vantageMouseLeftDoubleClick(V, x, y);
     }
+}
 
-    [commandBuffer commit];
+- (void)mouseDragged:(nonnull NSEvent *)event
+{
+    NSPoint eventLocation = [event locationInWindow];
+    int x = (int)eventLocation.x;
+    int y = windowSize_.height - (int)eventLocation.y;
+    vantageMouseMove(V, x, y);
+}
+
+- (void)rightMouseDown:(nonnull NSEvent *)event
+{
+    NSPoint eventLocation = [event locationInWindow];
+    int x = (int)eventLocation.x;
+    int y = windowSize_.height - (int)eventLocation.y;
+    vantageMouseSetPos(V, x, y);
+}
+
+- (void)rightMouseDragged:(nonnull NSEvent *)event
+{
+    NSPoint eventLocation = [event locationInWindow];
+    int x = (int)eventLocation.x;
+    int y = windowSize_.height - (int)eventLocation.y;
+    vantageMouseSetPos(V, x, y);
+}
+
+- (void)scrollWheel:(nonnull NSEvent *)event
+{
+    NSPoint eventLocation = [event locationInWindow];
+    int x = (int)eventLocation.x;
+    int y = windowSize_.height - (int)eventLocation.y;
+    CGFloat delta = [event deltaY];
+    NSLog(@"delta %f", delta);
+    vantageMouseWheel(V, x, y, -1 * delta);
 }
 
 - (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size
 {
-    /// Respond to drawable size or orientation changes here
-
-    // float aspect = size.width / (float)size.height;
-    // _projectionMatrix = matrix_ortho_right_hand(0.0f, 1280.0f, 720.0f, 0.0f, -1.0f, 1.0f);
-    // _projectionMatrix = matrix_perspective_right_hand(65.0f * (M_PI / 180.0f), aspect, 0.1f, 100.0f);
-    _projectionMatrix = matrix4x4_translation(0.0f, 0.0f, 0.0f);
-    _dimensions = size;
+    windowSize_ = view_.bounds.size;
+    vantagePlatformSetSize(V, windowSize_.width, windowSize_.height); // lies
+    // NSLog(@"Size changed to %d x %d", (int)windowSize_.width, (int)windowSize_.height);
 }
 
-#pragma mark Matrix Math Utilities
-
-matrix_float4x4 matrix4x4_translation(float tx, float ty, float tz)
+- (void)drawInMTKView:(nonnull MTKView *)view
 {
-    return (matrix_float4x4) { { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { tx, ty, tz, 1 } } };
+    // --------------------------------------------------------------------------------------------
+    // Update Vantage
+
+    if (V->imageDirty_) {
+        V->imageDirty_ = 0;
+
+        metalPreparedImage_ = nil;
+        if (V->preparedImage_) {
+            MTLTextureDescriptor * textureDescriptor = [[MTLTextureDescriptor alloc] init];
+            textureDescriptor.pixelFormat = MTLPixelFormatRGBA16Unorm;
+            textureDescriptor.width = V->preparedImage_->width;
+            textureDescriptor.height = V->preparedImage_->height;
+
+            metalPreparedImage_ = [device_ newTextureWithDescriptor:textureDescriptor];
+            MTLRegion region = MTLRegionMake2D(0, 0, textureDescriptor.width, textureDescriptor.height);
+            [metalPreparedImage_ replaceRegion:region
+                                   mipmapLevel:0
+                                         slice:0
+                                     withBytes:V->preparedImage_->pixels
+                                   bytesPerRow:8 * V->preparedImage_->width
+                                 bytesPerImage:0];
+        }
+    }
+
+    vantageRender(V);
+
+    // --------------------------------------------------------------------------------------------
+    // Render
+
+    dispatch_semaphore_wait(inFlightSemaphore_, DISPATCH_TIME_FOREVER);
+    id<MTLCommandBuffer> commandBuffer = [commandQueue_ commandBuffer];
+    commandBuffer.label = @"VantageRender";
+    __block dispatch_semaphore_t block_sema = inFlightSemaphore_;
+    [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+      dispatch_semaphore_signal(block_sema);
+    }];
+
+    MTLRenderPassDescriptor * renderPassDescriptor = view.currentRenderPassDescriptor;
+    if (renderPassDescriptor != nil) {
+        id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+        renderEncoder.label = @"VantageRenderEncoder";
+
+        int blitCount = daSize(&V->blits_);
+        for (int blitIndex = 0; blitIndex < blitCount; ++blitIndex) {
+            Blit * blit = &V->blits_[blitIndex];
+            if (blit->mode == BM_IMAGE) {
+                if (metalPreparedImage_ == nil) {
+                    continue;
+                }
+            }
+
+            id<MTLTexture> texture = nil;
+            switch (blit->mode) {
+                case BM_IMAGE:
+                    texture = metalPreparedImage_;
+                    break;
+                case BM_TEXT:
+                    texture = metalFontImage_;
+                    break;
+                case BM_FILL:
+                    texture = metalFillImage_;
+                    break;
+            }
+
+            Uniforms uniforms;
+            uniforms.color.x = blit->color.r;
+            uniforms.color.y = blit->color.g;
+            uniforms.color.z = blit->color.b;
+            uniforms.color.w = blit->color.a;
+            uniforms.uvScale.x = blit->sw;
+            uniforms.uvScale.y = blit->sh;
+            uniforms.uvOffset.x = blit->sx;
+            uniforms.uvOffset.y = blit->sy;
+            uniforms.vertexScale.x = blit->dw;
+            uniforms.vertexScale.y = blit->dh;
+            uniforms.vertexOffset.x = blit->dx;
+            uniforms.vertexOffset.y = blit->dy;
+            if (hdrActive_) {
+                uniforms.overrange = 100.0f;
+            } else {
+                uniforms.overrange = 1.0f;
+            }
+
+            [renderEncoder setRenderPipelineState:pipelineState_];
+            [renderEncoder setCullMode:MTLCullModeNone];
+            [renderEncoder setVertexBuffer:vertices_ offset:0 atIndex:VantageVertexInputIndexVertices];
+            [renderEncoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:VantageVertexInputIndexUniforms];
+            [renderEncoder setFragmentBytes:&uniforms length:sizeof(uniforms) atIndex:VantageVertexInputIndexUniforms];
+            [renderEncoder setFragmentTexture:texture atIndex:VantageTextureIndexMain];
+            [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertexCount_];
+        }
+
+        [renderEncoder endEncoding];
+        [commandBuffer presentDrawable:view.currentDrawable];
+    }
+
+    [commandBuffer commit];
+
+    // Awful hack
+    if (!windowTitleSet_) {
+        NSString * title = [[NSString alloc] initWithUTF8String:VANTAGE_WINDOW_TITLE];
+        view_.window.title = title;
+        windowTitleSet_ = true;
+    }
 }
-
-matrix_float4x4 matrix4x4_2d(float tx, float ty, float sx, float sy)
-{
-    return (matrix_float4x4) { { { sx, 0, 0, 0 }, { 0, sy, 0, 0 }, { 0, 0, 1, 0 }, { tx * sx, ty * sy, 0, 1 } } };
-}
-
-#if 0
-static matrix_float4x4 matrix4x4_rotation(float radians, vector_float3 axis)
-{
-    axis = vector_normalize(axis);
-    float ct = cosf(radians);
-    float st = sinf(radians);
-    float ci = 1 - ct;
-    float x = axis.x, y = axis.y, z = axis.z;
-
-    return (matrix_float4x4) { { { ct + x * x * ci, y * x * ci + z * st, z * x * ci - y * st, 0 },
-                                 { x * y * ci - z * st, ct + y * y * ci, z * y * ci + x * st, 0 },
-                                 { x * z * ci + y * st, y * z * ci - x * st, ct + z * z * ci, 0 },
-                                 { 0, 0, 0, 1 } } };
-}
-
-matrix_float4x4 matrix_perspective_right_hand(float fovyRadians, float aspect, float nearZ, float farZ)
-{
-    float ys = 1 / tanf(fovyRadians * 0.5);
-    float xs = ys / aspect;
-    float zs = farZ / (nearZ - farZ);
-
-    return (matrix_float4x4) { { { xs, 0, 0, 0 }, { 0, ys, 0, 0 }, { 0, 0, zs, -1 }, { 0, 0, nearZ * zs, 0 } } };
-}
-
-matrix_float4x4 matrix_make_rows(float m00,
-                                 float m10,
-                                 float m20,
-                                 float m30,
-                                 float m01,
-                                 float m11,
-                                 float m21,
-                                 float m31,
-                                 float m02,
-                                 float m12,
-                                 float m22,
-                                 float m32,
-                                 float m03,
-                                 float m13,
-                                 float m23,
-                                 float m33)
-{
-    return (matrix_float4x4) { { { m00, m01, m02, m03 }, // each line here provides column data
-                                 { m10, m11, m12, m13 },
-                                 { m20, m21, m22, m23 },
-                                 { m30, m31, m32, m33 } } };
-}
-
-matrix_float4x4 matrix_ortho_right_hand(float left, float right, float bottom, float top, float nearZ, float farZ)
-{
-    return matrix_make_rows(2 / (right - left),
-                            0,
-                            0,
-                            (left + right) / (left - right),
-                            0,
-                            2 / (top - bottom),
-                            0,
-                            (top + bottom) / (bottom - top),
-                            0,
-                            0,
-                            -1 / (farZ - nearZ),
-                            nearZ / (nearZ - farZ),
-                            0,
-                            0,
-                            0,
-                            1);
-}
-
-#endif
 
 @end

@@ -1,50 +1,47 @@
-// ---------------------------------------------------------------------------
-//                         Copyright Joe Drago 2019.
-//         Distributed under the Boost Software License, Version 1.0.
-//            (See accompanying file LICENSE_1_0.txt or copy at
-//                  http://www.boost.org/LICENSE_1_0.txt)
-// ---------------------------------------------------------------------------
+// Copyright 2019 Joe Drago. All rights reserved.
+// SPDX-License-Identifier: BSD-2-Clause
 
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-#import "ShaderTypes.h"
-
 using namespace metal;
 
-typedef struct
-{
-    float3 position [[attribute(VertexAttributePosition)]];
-    float2 texCoord [[attribute(VertexAttributeTexcoord)]];
-} Vertex;
+#import "ShaderTypes.h"
 
 typedef struct
 {
-    float4 position [[position]];
-    float2 texCoord;
-} ColorInOut;
+    float4 pos [[position]];
+    float2 uv;
+} RasterizerData;
 
-vertex ColorInOut vertexShader(Vertex in [[stage_in]],
-                               constant Uniforms & uniforms [[ buffer(BufferIndexUniforms) ]])
+vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
+                                   constant VantageVertex * vertexArray [[buffer(VantageVertexInputIndexVertices)]],
+                                   constant Uniforms * uniforms [[buffer(VantageVertexInputIndexUniforms)]])
+
 {
-    ColorInOut out;
+    RasterizerData out;
 
-    float4 position = float4(in.position, 1.0);
-    out.position = uniforms.projectionMatrix * uniforms.modelViewMatrix * position;
-    out.texCoord = in.texCoord;
+    float2 rawPos = vertexArray[vertexID].pos.xy * uniforms->vertexScale + uniforms->vertexOffset;
+    float4 pos = vector_float4(rawPos.x, rawPos.y, 0.0, 1.0);
+
+    // transform
+    pos.x = (pos.x * 2.0) - 1.0;
+    pos.y = (pos.y * -2.0) + 1.0;
+
+    out.pos = pos; //vector_float4((pixelSpacePosition.x * 2.0) - 1.0, (pixelSpacePosition.y * -2.0) + 1.0, 0.0, 1.0);
+    out.uv = vertexArray[vertexID].uv;
 
     return out;
 }
 
-fragment float4 fragmentShader(ColorInOut in [[stage_in]],
-                               constant Uniforms & uniforms [[ buffer(BufferIndexUniforms) ]],
-                               texture2d<float> colorMap    [[ texture(TextureIndexColor) ]])
+fragment float4 fragmentShader(RasterizerData in [[stage_in]],
+                               texture2d<half> colorTexture [[texture(VantageTextureIndexMain)]],
+                               constant Uniforms * uniforms [[buffer(VantageVertexInputIndexUniforms)]])
 {
-    constexpr sampler colorSampler(mip_filter::linear,
-                                   mag_filter::linear,
-                                   min_filter::linear);
+    constexpr sampler textureSampler(mag_filter::nearest, min_filter::nearest);
 
-    float4 colorSample   = colorMap.sample(colorSampler, in.texCoord.xy);
-
-    return colorSample * uniforms.overrange;
+    float2 uv = in.uv * uniforms->uvScale + uniforms->uvOffset;
+    float4 colorSample = float4(colorTexture.sample(textureSampler, uv)) * uniforms->color;
+    colorSample.rgb *= uniforms->overrange;
+    return float4(colorSample);
 }

@@ -1,9 +1,5 @@
-// ---------------------------------------------------------------------------
-//                         Copyright Joe Drago 2019.
-//         Distributed under the Boost Software License, Version 1.0.
-//            (See accompanying file LICENSE_1_0.txt or copy at
-//                  http://www.boost.org/LICENSE_1_0.txt)
-// ---------------------------------------------------------------------------
+// Copyright 2019 Joe Drago. All rights reserved.
+// SPDX-License-Identifier: BSD-2-Clause
 
 #import "VantageView.h"
 
@@ -15,6 +11,8 @@
 
 - (void)allowDragAndDrop
 {
+    self.V = vantageCreate(); // where to clean this up?
+
     [self registerForDraggedTypes:[NSArray arrayWithObjects:NSPasteboardTypeFileURL, nil]];
 }
 
@@ -39,7 +37,12 @@
         NSArray * urls = [pboard readObjectsForClasses:[NSArray arrayWithObject:[NSURL class]]
                                                options:[NSDictionary dictionaryWithObject:[NSNumber numberWithBool:YES]
                                                                                    forKey:NSPasteboardURLReadingFileURLsOnlyKey]];
-        if ([urls count] == 1) {
+        int urlCount = [urls count];
+        if (urlCount == 2) {
+            NSURL * url1 = [urls objectAtIndex:0];
+            NSURL * url2 = [urls objectAtIndex:1];
+            [self.renderer loadImage:url1.path diff:url2.path];
+        } else if (urlCount > 0) {
             NSURL * url = [urls objectAtIndex:0];
             [self.renderer loadImage:url.path diff:nil];
         }
@@ -47,10 +50,35 @@
     return YES;
 }
 
-// - (void)mouseDragged:(NSEvent *)event
-// {
-//     [self.renderer mouseDragged:event];
-// }
+- (void)mouseDown:(NSEvent *)event
+{
+    [self.renderer mouseDown:event];
+}
+
+- (void)mouseUp:(NSEvent *)event
+{
+    [self.renderer mouseUp:event];
+}
+
+- (void)mouseDragged:(NSEvent *)event
+{
+    [self.renderer mouseDragged:event];
+}
+
+- (void)rightMouseDown:(NSEvent *)event
+{
+    [self.renderer rightMouseDown:event];
+}
+
+- (void)rightMouseDragged:(NSEvent *)event
+{
+    [self.renderer rightMouseDragged:event];
+}
+
+- (void)scrollWheel:(NSEvent *)event
+{
+    [self.renderer scrollWheel:event];
+}
 
 // - (BOOL)acceptsFirstResponder
 // {
