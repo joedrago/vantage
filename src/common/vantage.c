@@ -465,6 +465,9 @@ void vantageMouseLeftDown(Vantage * V, int x, int y)
 
 void vantageMouseLeftUp(Vantage * V, int x, int y)
 {
+    (void)x;
+    (void)y;
+
     V->dragging_ = 0;
 }
 
@@ -1010,4 +1013,35 @@ void vantageRender(Vantage * V)
             top += nextLine;
         }
     }
+}
+
+// This could potentially use clFormatDetect() instead, but that'd cause a lot of header reads.
+int vantageIsImageFile(const char * filename)
+{
+    const char * ext = strrchr(filename, '.');
+    if (ext) {
+        if (!strcmp(ext, ".apg"))
+            return 1;
+        if (!strcmp(ext, ".avif"))
+            return 1;
+        if (!strcmp(ext, ".bmp"))
+            return 1;
+        if (!strcmp(ext, ".jpg"))
+            return 1;
+        if (!strcmp(ext, ".jpeg"))
+            return 1;
+        if (!strcmp(ext, ".jp2"))
+            return 1;
+        if (!strcmp(ext, ".j2k"))
+            return 1;
+        if (!strcmp(ext, ".png"))
+            return 1;
+        if (!strcmp(ext, ".tif"))
+            return 1;
+        if (!strcmp(ext, ".tiff"))
+            return 1;
+        if (!strcmp(ext, ".webp"))
+            return 1;
+    }
+    return 0;
 }

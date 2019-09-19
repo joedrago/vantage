@@ -342,7 +342,50 @@ static const NSUInteger kMaxBuffersInFlight = 3;
 {
     if (diffPath == nil) {
         vantageFileListClear(V);
-        vantageFileListAppend(V, [path UTF8String]);
+
+        char * cpath = NULL;
+        dsCopy(&cpath, [path UTF8String]);
+        char * lastSlash = strrchr(cpath, '/');
+        if (lastSlash != NULL) {
+            *lastSlash = 0;
+            char * cdir = NULL;
+            dsCopy(&cdir, cpath);
+            *lastSlash = '/';
+            NSString * nsDir = [NSString stringWithUTF8String:cdir];
+            NSArray * files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:nsDir error:NULL];
+            int fileCount = [files count];
+            if (fileCount > 0) {
+                NSArray * sortedFiles = [files sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)];
+
+                char * fullFilename = NULL;
+                for (int i = 0; i < fileCount; ++i) {
+                    NSString * filename = [sortedFiles objectAtIndex:i];
+                    dsCopy(&fullFilename, cdir);
+                    dsConcat(&fullFilename, "/");
+                    dsConcat(&fullFilename, [filename UTF8String]);
+                    if (vantageIsImageFile(fullFilename)) {
+                        vantageFileListAppend(V, fullFilename);
+                    }
+                }
+                dsDestroy(&fullFilename);
+            }
+            dsDestroy(&cdir);
+        }
+        if (daSize(&V->filenames_) > 1) {
+            // Find our original path in there
+            V->imageFileIndex_ = 0;
+            for (int i = 0; i < daSize(&V->filenames_); ++i) {
+                if (!strcmp(V->filenames_[i], cpath)) {
+                    V->imageFileIndex_ = i;
+                    break;
+                }
+            }
+        } else {
+            // Give up and just put the original path in there
+            vantageFileListAppend(V, [path UTF8String]);
+        }
+        dsDestroy(&cpath);
+
         vantageLoad(V, 0);
     } else {
         vantageLoadDiff(V, [path UTF8String], [diffPath UTF8String]);

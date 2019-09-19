@@ -1200,37 +1200,6 @@ static void checkHDR()
     vantagePlatformSetHDRActive(vantage_, hdrActive);
 }
 
-// This could potentially use clFormatDetect() instead, but that'd cause a lot of header reads.
-static bool isImageFile(const char * filename)
-{
-    const char * ext = strrchr(filename, '.');
-    if (ext) {
-        if (!strcmp(ext, ".apg"))
-            return true;
-        if (!strcmp(ext, ".avif"))
-            return true;
-        if (!strcmp(ext, ".bmp"))
-            return true;
-        if (!strcmp(ext, ".jpg"))
-            return true;
-        if (!strcmp(ext, ".jpeg"))
-            return true;
-        if (!strcmp(ext, ".jp2"))
-            return true;
-        if (!strcmp(ext, ".j2k"))
-            return true;
-        if (!strcmp(ext, ".png"))
-            return true;
-        if (!strcmp(ext, ".tif"))
-            return true;
-        if (!strcmp(ext, ".tiff"))
-            return true;
-        if (!strcmp(ext, ".webp"))
-            return true;
-    }
-    return false;
-}
-
 static bool sortAlphabeticallyIgnoringCase(const std::string & a, const std::string & b)
 {
     return _stricmp(a.c_str(), b.c_str()) < 0;
@@ -1260,7 +1229,7 @@ static void loadAdjacentPaths(const char * filename)
             foundFilenameStr += wfd.cFileName;
             char foundFilename[MAX_PATH];
             GetFullPathNameA(foundFilenameStr.c_str(), MAX_PATH, foundFilename, nullptr);
-            if (isImageFile(foundFilename)) {
+            if (vantageIsImageFile(foundFilename)) {
                 imageList.push_back(foundFilename);
             }
         } while (FindNextFile(hFind, &wfd));

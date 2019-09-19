@@ -160,6 +160,9 @@ void vantagePlatformSetUsesLinear(Vantage * V, int usesLinear);
 void vantagePrepareImage(Vantage * V);
 void vantageRender(Vantage * V);
 
+// Helpers
+int vantageIsImageFile(const char * filename);
+
 #ifdef __cplusplus
 }
 #endif
