@@ -1020,8 +1020,6 @@ int vantageIsImageFile(const char * filename)
 {
     const char * ext = strrchr(filename, '.');
     if (ext) {
-        if (!strcmp(ext, ".apg"))
-            return 1;
         if (!strcmp(ext, ".avif"))
             return 1;
         if (!strcmp(ext, ".bmp"))

@@ -188,7 +188,7 @@ static void toggleFullscreen()
 }
 
 static const char * imageFileFilter =
-    "All Image Files (*.apg, *.avif, *.bmp, *.jpg, *.jpeg, *.jp2, *.j2k, *.png, *.tif, *.tiff, *.webp)\0*.apg;*.avif;*.bmp;*.jpg;*.jpeg;*.jp2;*.j2k;*.png;*.tif;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+    "All Image Files (*.avif, *.bmp, *.jpg, *.jpeg, *.jp2, *.j2k, *.png, *.tif, *.tiff, *.webp)\0*.avif;*.bmp;*.jpg;*.jpeg;*.jp2;*.j2k;*.png;*.tif;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
 
 static void fileOpen()
 {
