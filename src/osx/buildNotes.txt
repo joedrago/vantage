@@ -12,6 +12,7 @@ Build Notes:
 * Symlink /usr/local/libdav1d.a into appropriate Debug/Release dirs in build dir
 * Hook up AppIcon in General tab (TODO: figure out why this isn't automatic)
 * Make sure codesigning is setup right
+* Make sure hardening is enabled
 
 Xcode Notes:
 
@@ -31,3 +32,9 @@ To make a Release build:
 * sudo pip3 install dmgbuild
 * Run in build.vantage/Release dir:
   * coffee /path/to/vantageSource/src/osx/package/package.coffee
+* Notarize the package
+   * xcrun altool --notarize-app --primary-bundle-id joedrago.Vantage --username "email@here" --password one-time-password-here --file vantage-VERSION_HERE.dmg
+   * xcrun altool --notarization-history 0 --username "email@here" --password one-time-password-here
+   * xcrun stapler staple Vantage.app
+   * rerun: coffee /path/to/vantageSource/src/osx/package/package.coffee
+   * upload final dmg
