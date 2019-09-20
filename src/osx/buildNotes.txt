@@ -3,7 +3,7 @@
 Build Notes:
 
 * Build dav1d
-  * meson --default-library=static --buildtype release ..
+  * meson --default-library=static --buildtype release -Dc_args=-fno-stack-check ..
   * ninja && ninja install
 
 * Make Xcode project
