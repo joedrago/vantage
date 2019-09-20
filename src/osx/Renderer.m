@@ -443,7 +443,7 @@ static const NSUInteger kMaxBuffersInFlight = 3;
     int x = (int)eventLocation.x;
     int y = windowSize_.height - (int)eventLocation.y;
     CGFloat delta = [event deltaY];
-    NSLog(@"delta %f", delta);
+    // NSLog(@"delta %f", delta);
     vantageMouseWheel(V, x, y, -1 * delta);
 }
 
