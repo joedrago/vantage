@@ -58,7 +58,7 @@ typedef struct Vantage
     int platformH_;
     int platformWhiteLevel_;
     int platformHDRActive_;
-    int platformUsesLinear_;
+    int platformLinearMax_;
 
     // List of filenames to cycle through (arrow keys)
     char ** filenames_;
@@ -154,7 +154,7 @@ void vantageMouseWheel(Vantage * V, int x, int y, float delta);
 void vantagePlatformSetHDRActive(Vantage * V, int hdrActive);
 void vantagePlatformSetSize(Vantage * V, int width, int height);
 void vantagePlatformSetWhiteLevel(Vantage * V, int whiteLevel);
-void vantagePlatformSetUsesLinear(Vantage * V, int usesLinear);
+void vantagePlatformSetLinearMax(Vantage * V, int linearMax); // If 0, use PQ, otherwise use Linear, tonemapped to linearMax nits
 
 // Rendering
 void vantagePrepareImage(Vantage * V);

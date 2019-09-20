@@ -12,6 +12,7 @@
 #import "colorist/colorist.h"
 
 static const NSUInteger kMaxBuffersInFlight = 3;
+static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
 
 @implementation Renderer {
     // Vantage
@@ -55,8 +56,9 @@ static const NSUInteger kMaxBuffersInFlight = 3;
     // Init Vantage
 
     V = view_.V;
-    vantagePlatformSetWhiteLevel(V, 100);
-    vantagePlatformSetUsesLinear(V, 1);
+
+    vantagePlatformSetWhiteLevel(V, MACOS_SDR_WHITE_NITS);
+    vantagePlatformSetLinearMax(V, MACOS_SDR_WHITE_NITS); // set the default, this will change every frame
 
     // TODO: get from OS, react when it changes
     hdrActive_ = true;
@@ -70,6 +72,8 @@ static const NSUInteger kMaxBuffersInFlight = 3;
     CAMetalLayer * metalLayer = (CAMetalLayer *)view.layer;
     metalLayer.wantsExtendedDynamicRangeContent = YES;
     metalLayer.pixelFormat = MTLPixelFormatRGBA16Float;
+    // CAEDRMetadata * edrMetadata = [CAEDRMetadata HDR10MetadataWithMinLuminance:0 maxLuminance:10000.0f opticalOutputScale:100.0f];
+    // metalLayer.EDRMetadata = edrMetadata;
     view.colorPixelFormat = MTLPixelFormatRGBA16Float;
     view.sampleCount = 1;
 
@@ -459,6 +463,13 @@ static const NSUInteger kMaxBuffersInFlight = 3;
     // --------------------------------------------------------------------------------------------
     // Update Vantage
 
+    float maxEDR = view_.window.screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
+    // float curious = view_.window.screen.maximumExtendedDynamicRangeColorComponentValue;
+    if (maxEDR < 1.0f) {
+        maxEDR = 1.0f;
+    }
+    vantagePlatformSetLinearMax(V, MACOS_SDR_WHITE_NITS * ((int)maxEDR));
+
     if (V->imageDirty_) {
         V->imageDirty_ = 0;
 
@@ -534,7 +545,7 @@ static const NSUInteger kMaxBuffersInFlight = 3;
             uniforms.vertexOffset.x = blit->dx;
             uniforms.vertexOffset.y = blit->dy;
             if (hdrActive_) {
-                uniforms.overrange = 100.0f;
+                uniforms.overrange = ((float)V->platformLinearMax_) / (float)MACOS_SDR_WHITE_NITS;
             } else {
                 uniforms.overrange = 1.0f;
             }

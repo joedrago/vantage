@@ -60,7 +60,7 @@ Vantage * vantageCreate(void)
     V->platformW_ = 1;
     V->platformH_ = 1;
     V->platformHDRActive_ = 0;
-    V->platformUsesLinear_ = 0;
+    V->platformLinearMax_ = 0; // PQ by default
 
     V->C = clContextCreate(NULL);
     V->filenames_ = NULL;
@@ -548,10 +548,10 @@ void vantagePlatformSetWhiteLevel(Vantage * V, int whiteLevel)
     }
 }
 
-void vantagePlatformSetUsesLinear(Vantage * V, int usesLinear)
+void vantagePlatformSetLinearMax(Vantage * V, int linearMax)
 {
-    if (V->platformUsesLinear_ != usesLinear) {
-        V->platformUsesLinear_ = usesLinear;
+    if (V->platformLinearMax_ != linearMax) {
+        V->platformLinearMax_ = linearMax;
         vantagePrepareImage(V);
     }
 }
@@ -644,12 +644,13 @@ void vantagePrepareImage(Vantage * V)
         int dstLuminance = 10000;
         if (V->platformHDRActive_) {
             clContextGetStockPrimaries(V->C, "bt2020", &primaries);
-            if (V->platformUsesLinear_) {
+            if (V->platformLinearMax_ > 0) {
                 curve.type = CL_PCT_GAMMA;
+                dstLuminance = V->platformLinearMax_;
             } else {
                 curve.type = CL_PCT_PQ;
+                dstLuminance = 10000;
             }
-            dstLuminance = 10000;
             curve.implicitScale = 1.0f;
             curve.gamma = 1.0f;
             V->imageHDR_ = 1;
@@ -983,25 +984,30 @@ void vantageRender(Vantage * V)
         if (V->platformHDRActive_) {
             // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
             lum = powf(lum, 2.2f);
-            lum *= (float)V->platformWhiteLevel_ / 10000.0f;
-            lum = PQ_OETF(lum);
-        }
-
-        char buffer[1024];
-        int sdrWhite = V->platformWhiteLevel_;
-        if (showHLG) {
-            sprintf(buffer,
-                    "SDR: %d nits, HLG peak: %d nits, HDR: %s",
-                    sdrWhite,
-                    clTransformCalcHLGLuminance(sdrWhite),
-                    V->platformHDRActive_ ? "Active" : "Inactive");
-        } else {
-            sprintf(buffer, "SDR: %d nits, HDR: %s", sdrWhite, V->platformHDRActive_ ? "Active" : "Inactive");
+            if (V->platformLinearMax_ > 0) {
+                lum *= (float)V->platformWhiteLevel_ / (float)V->platformLinearMax_;
+            } else {
+                lum *= (float)V->platformWhiteLevel_ / 10000.0f;
+                lum = PQ_OETF(lum);
+            }
         }
 
         Color color = { 1.0f, 1.0f, 1.0f, 1.0f };
         color.a = lum;
-        vantageBlitString(V, buffer, 10, clientH - 25.0f, fontHeight, &color);
+
+        char * luminanceDisplay = NULL;
+        int sdrWhite = V->platformWhiteLevel_;
+        dsConcatf(&luminanceDisplay, "SDR: %d nits", sdrWhite);
+        if (showHLG) {
+            dsConcatf(&luminanceDisplay, ", HLG peak: %d nits", clTransformCalcHLGLuminance(sdrWhite));
+        }
+        if (V->platformHDRActive_) {
+            dsConcatf(&luminanceDisplay, ", HDR: Active (%d nits cap)", (V->platformLinearMax_ > 0) ? V->platformLinearMax_ : 10000);
+        } else {
+            dsConcatf(&luminanceDisplay, ", HDR: Inactive");
+        }
+        vantageBlitString(V, luminanceDisplay, 10, clientH - 25.0f, fontHeight, &color);
+        dsDestroy(&luminanceDisplay);
 
         for (int i = 0; i < daSize(&V->overlay_); ++i) {
             vantageBlitString(V, V->overlay_[i], 10, top + (i * nextLine), fontHeight, &color);
