@@ -1304,12 +1304,9 @@ static void loadAdjacentPaths(const char * filename)
 
     std::sort(imageList.begin(), imageList.end(), sortAlphabeticallyIgnoringCase);
 
-    vantageFileListClear(vantage_);
-
     int requestedFilenameIndex = -1;
     int index = 0;
     for (auto it = imageList.begin(); it != imageList.end(); ++it, ++index) {
-        vantageFileListAppend(vantage_, it->c_str());
         if (!strcmp(it->c_str(), fullFilename)) {
             requestedFilenameIndex = index;
         }
@@ -1321,6 +1318,10 @@ static void loadAdjacentPaths(const char * filename)
         requestedFilenameIndex = (int)imageList.size() - 1;
     }
 
+    vantageFileListClear(vantage_);
+    for (auto it = imageList.begin(); it != imageList.end(); ++it, ++index) {
+        vantageFileListAppend(vantage_, it->c_str());
+    }
     vantage_->imageFileIndex_ = requestedFilenameIndex;
     vantageLoad(vantage_, 0);
 }

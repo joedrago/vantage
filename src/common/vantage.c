@@ -211,11 +211,15 @@ void vantageLoad(Vantage * V, int offset)
     V->C->params.frameIndex = V->imageVideoFrameNextIndex_;
     V->imageVideoFrameNextIndex_ = 0;
 
+    const char * outFormatName = NULL;
     V->imageFileSize_ = clFileSize(filename);
     V->imageFileSize2_ = 0;
-    V->image_ = clContextRead(V->C, filename, NULL, NULL);
+    V->image_ = clContextRead(V->C, filename, NULL, &outFormatName);
     V->imageVideoFrameIndex_ = V->C->readExtraInfo.frameIndex;
     V->imageVideoFrameCount_ = V->C->readExtraInfo.frameCount;
+    if (!outFormatName) {
+        outFormatName = "Unknown";
+    }
 
     V->diffMode_ = DIFFMODE_SHOW1;
 
@@ -233,9 +237,9 @@ void vantageLoad(Vantage * V, int offset)
     vantageResetImagePos(V);
     clearOverlay(V);
     if (V->image_) {
-        appendOverlay(V, "[%d/%d] Loaded: %s", V->imageFileIndex_ + 1, daSize(&V->filenames_), shortFilename);
+        appendOverlay(V, "[%d/%d] Loaded (%s): %s", V->imageFileIndex_ + 1, daSize(&V->filenames_), outFormatName, shortFilename);
     } else {
-        appendOverlay(V, "[%d/%d] Failed to load: %s", V->imageFileIndex_ + 1, daSize(&V->filenames_), shortFilename);
+        appendOverlay(V, "[%d/%d] Failed to load (%s): %s", V->imageFileIndex_ + 1, daSize(&V->filenames_), outFormatName, shortFilename);
     }
 }
 
@@ -858,7 +862,7 @@ static void vantageUpdateInfo(Vantage * V)
             } else if (fileSize > 1024) {
                 appendInfo(V, "File Size      : %2.2f KB", (float)fileSize / 1024.0f);
             } else {
-                appendInfo(V, "File Size      : %d bytes", (float)fileSize);
+                appendInfo(V, "File Size      : %d bytes", fileSize);
             }
         } else {
             appendInfo(V, "");
@@ -1076,6 +1080,8 @@ int vantageIsImageFile(const char * filename)
     if (ext) {
         if (!strcmp(ext, ".avif"))
             return 1;
+        if (!strcmp(ext, ".avifs"))
+            return 1;
         if (!strcmp(ext, ".bmp"))
             return 1;
         if (!strcmp(ext, ".jpg"))
@@ -1085,6 +1091,8 @@ int vantageIsImageFile(const char * filename)
         if (!strcmp(ext, ".jp2"))
             return 1;
         if (!strcmp(ext, ".j2k"))
+            return 1;
+        if (!strcmp(ext, ".mp4")) // I don't love this, but av01 inside a .mp4 is supported, so I'l add it
             return 1;
         if (!strcmp(ext, ".png"))
             return 1;

@@ -448,12 +448,17 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
         }
         if (daSize(&V->filenames_) > 1) {
             // Find our original path in there
-            V->imageFileIndex_ = 0;
+            V->imageFileIndex_ = -1;
             for (int i = 0; i < daSize(&V->filenames_); ++i) {
                 if (!strcmp(V->filenames_[i], cpath)) {
                     V->imageFileIndex_ = i;
                     break;
                 }
+            }
+            if (V->imageFileIndex_ == -1) {
+                // Somehow the original file wasn't found, tack it onto the end of the list
+                vantageFileListAppend(V, cpath);
+                V->imageFileIndex_ = (int)(daSize(&V->filenames_) - 1);
             }
         } else {
             // Give up and just put the original path in there
@@ -519,7 +524,7 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     int y = windowSize_.height - (int)eventLocation.y;
     CGFloat delta = [event deltaY];
     // NSLog(@"delta %f", delta);
-    vantageMouseWheel(V, x, y, -1 * delta);
+    vantageMouseWheel(V, x, y, delta);
 }
 
 - (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size
