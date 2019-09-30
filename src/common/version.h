@@ -5,4 +5,4 @@
 //                  http://www.boost.org/LICENSE_1_0.txt)
 // ---------------------------------------------------------------------------
 
-#define VANTAGE_VERSION 0.3.2
+#define VANTAGE_VERSION 0.3.3
