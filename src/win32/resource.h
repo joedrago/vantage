@@ -9,6 +9,9 @@
 #define IDI_VANTAGE                     107
 #define IDC_VANTAGE                     109
 #define IDR_MAINFRAME                   128
+#define IDD_DIALOG1                     129
+#define IDD_GOTOFRAME                   129
+#define IDC_INPUT                       1000
 #define ID_VIEW_FULLSCREEN              32771
 #define ID_FILE_OPEN                    32772
 #define ID_VIEW_NEXTIMAGE               32773
@@ -42,15 +45,16 @@
 #define ID_VIEW_TOGGLESRGBHIGHLIGHT     32801
 #define ID_VIEW_RESETIMAGEPOSITION      32802
 #define IDC_STATIC                      -1
+#define IDC_INFORMATIVE                 -1
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        129
+#define _APS_NEXT_RESOURCE_VALUE        130
 #define _APS_NEXT_COMMAND_VALUE         32803
-#define _APS_NEXT_CONTROL_VALUE         1000
+#define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

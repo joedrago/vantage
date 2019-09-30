@@ -175,6 +175,13 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     [center addObserver:self selector:@selector(adjustThresholdP5:) name:@"adjustThresholdP5" object:nil];
     [center addObserver:self selector:@selector(adjustThresholdP50:) name:@"adjustThresholdP50" object:nil];
     [center addObserver:self selector:@selector(adjustThresholdP500:) name:@"adjustThresholdP500" object:nil];
+    [center addObserver:self selector:@selector(sequenceRewind20:) name:@"sequenceRewind20" object:nil];
+    [center addObserver:self selector:@selector(sequenceAdvance20:) name:@"sequenceAdvance20" object:nil];
+    [center addObserver:self selector:@selector(sequenceRewind5:) name:@"sequenceRewind5" object:nil];
+    [center addObserver:self selector:@selector(sequenceAdvance5:) name:@"sequenceAdvance5" object:nil];
+    [center addObserver:self selector:@selector(sequencePreviousFrame:) name:@"sequencePreviousFrame" object:nil];
+    [center addObserver:self selector:@selector(sequenceNextFrame:) name:@"sequenceNextFrame" object:nil];
+    [center addObserver:self selector:@selector(sequenceGotoFrame:) name:@"sequenceGotoFrame" object:nil];
 }
 
 - (void)openDocument:(NSNotification *)notification
@@ -331,6 +338,70 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
 - (void)adjustThresholdP500:(NSNotification *)notification
 {
     vantageAdjustThreshold(V, 500);
+}
+
+- (void)sequenceRewind20:(NSNotification *)notification
+{
+    vantageSetVideoFrameIndexPercentOffset(V, -20);
+}
+
+- (void)sequenceAdvance20:(NSNotification *)notification
+{
+    vantageSetVideoFrameIndexPercentOffset(V, 20);
+}
+
+- (void)sequenceRewind5:(NSNotification *)notification
+{
+    vantageSetVideoFrameIndexPercentOffset(V, -5);
+}
+
+- (void)sequenceAdvance5:(NSNotification *)notification
+{
+    vantageSetVideoFrameIndexPercentOffset(V, 5);
+}
+
+- (void)sequencePreviousFrame:(NSNotification *)notification
+{
+    vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ - 1);
+}
+
+- (void)sequenceNextFrame:(NSNotification *)notification
+{
+    vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ + 1);
+}
+
+- (void)sequenceGotoFrame:(NSNotification *)notification
+{
+    int lastFrameIndex = V->imageVideoFrameCount_ - 1;
+    if (lastFrameIndex < 0) {
+        lastFrameIndex = 0;
+    }
+    char * informativeTextString = NULL;
+    dsConcatf(&informativeTextString, "(0-based, Last Frame Index: %d)", lastFrameIndex);
+
+    char * defaultValueString = NULL;
+    dsConcatf(&defaultValueString, "%d", V->imageVideoFrameIndex_);
+
+    NSAlert * alert = [NSAlert new];
+    alert.messageText = @"Goto Frame Index:";
+    alert.informativeText = [[NSString alloc] initWithUTF8String:informativeTextString];
+    alert.alertStyle = NSAlertStyleInformational;
+    alert.delegate = nil;
+    [alert addButtonWithTitle:@"Goto Frame"];
+    [alert addButtonWithTitle:@"Cancel"];
+
+    NSTextField * input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
+    [input setStringValue:[[NSString alloc] initWithUTF8String:defaultValueString]];
+    [alert setAccessoryView:input];
+
+    NSInteger button = [alert runModal];
+    if (button == NSAlertFirstButtonReturn) {
+        int typedFrameIndex = atoi([[input stringValue] UTF8String]);
+        vantageSetVideoFrameIndex(V, typedFrameIndex);
+    }
+
+    dsDestroy(&informativeTextString);
+    dsDestroy(&defaultValueString);
 }
 
 - (void)openFile:(NSNotification *)notification

@@ -88,6 +88,9 @@ Vantage * vantageCreate(void)
     V->imageInfoX_ = -1;
     V->imageInfoY_ = -1;
     V->imageDirty_ = 0;
+    V->imageVideoFrameNextIndex_ = 0;
+    V->imageVideoFrameIndex_ = 0;
+    V->imageVideoFrameCount_ = 0;
 
     clRaw rawFont;
     rawFont.ptr = monoBinaryData;
@@ -204,9 +207,15 @@ void vantageLoad(Vantage * V, int offset)
 
     char * filename = V->filenames_[V->imageFileIndex_];
 
+    // consume the next index and reset it
+    V->C->params.frameIndex = V->imageVideoFrameNextIndex_;
+    V->imageVideoFrameNextIndex_ = 0;
+
     V->imageFileSize_ = clFileSize(filename);
     V->imageFileSize2_ = 0;
     V->image_ = clContextRead(V->C, filename, NULL, NULL);
+    V->imageVideoFrameIndex_ = V->C->readExtraInfo.frameIndex;
+    V->imageVideoFrameCount_ = V->C->readExtraInfo.frameCount;
 
     V->diffMode_ = DIFFMODE_SHOW1;
 
@@ -379,6 +388,38 @@ void vantageToggleSrgbHighlight(Vantage * V)
 
     V->srgbHighlight_ = V->srgbHighlight_ ? 0 : 1;
     vantagePrepareImage(V);
+}
+
+void vantageSetVideoFrameIndex(Vantage * V, int videoFrameIndex)
+{
+    if (videoFrameIndex >= V->imageVideoFrameCount_) {
+        videoFrameIndex = V->imageVideoFrameCount_ - 1;
+    }
+    if (videoFrameIndex < 0) {
+        videoFrameIndex = 0;
+    }
+
+    V->imageVideoFrameNextIndex_ = videoFrameIndex;
+    vantageLoad(V, 0);
+}
+
+void vantageSetVideoFrameIndexPercentOffset(Vantage * V, int percentOffset)
+{
+    int absPercent = abs(percentOffset);
+    int sign = 1;
+    if (percentOffset < 0) {
+        sign = -1;
+    }
+
+    int offset = 1;
+    if ((V->imageVideoFrameCount_ > 1) && (absPercent > 0)) {
+        offset = V->imageVideoFrameCount_ * absPercent / 100;
+    }
+    if (offset < 1) {
+        offset = 1;
+    }
+
+    vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ + (sign * offset));
 }
 
 // --------------------------------------------------------------------------------------
@@ -1008,6 +1049,13 @@ void vantageRender(Vantage * V)
         }
         vantageBlitString(V, luminanceDisplay, 10, clientH - 25.0f, fontHeight, &color);
         dsDestroy(&luminanceDisplay);
+
+        if (V->imageVideoFrameCount_ > 1) {
+            char * frameCountDisplay = NULL;
+            dsConcatf(&frameCountDisplay, "Frm: %d / %d (%d total)", V->imageVideoFrameIndex_, V->imageVideoFrameCount_ - 1, V->imageVideoFrameCount_);
+            vantageBlitString(V, frameCountDisplay, 10, clientH - 45.0f, fontHeight, &color);
+            dsDestroy(&frameCountDisplay);
+        }
 
         for (int i = 0; i < daSize(&V->overlay_); ++i) {
             vantageBlitString(V, V->overlay_[i], 10, top + (i * nextLine), fontHeight, &color);

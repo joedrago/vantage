@@ -46,6 +46,8 @@ static HINSTANCE hInstance_;
 static HWND hwnd_;
 static HMENU menu_;
 static bool fullscreen_;
+static char * gotoFrameInformative_ = NULL;
+static char * gotoFrameInput_ = NULL;
 
 // D3D
 struct ConstantBuffer
@@ -243,6 +245,50 @@ static void diffOpen()
     }
 }
 
+static LRESULT CALLBACK GotoFrameProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message) {
+        case WM_INITDIALOG:
+            SetWindowText(GetDlgItem(hwnd, IDC_INFORMATIVE), gotoFrameInformative_);
+            SetWindowText(GetDlgItem(hwnd, IDC_INPUT), gotoFrameInput_);
+            return FALSE;
+
+        case WM_COMMAND:
+            if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
+                char buffer[1024];
+                GetWindowText(GetDlgItem(hwnd, IDC_INPUT), buffer, 1024);
+                buffer[1023] = 0;
+                dsCopy(&gotoFrameInput_, buffer);
+
+                EndDialog(hwnd, LOWORD(wParam));
+                return (INT_PTR)TRUE;
+            }
+            break;
+
+        default:
+            return DefWindowProc(hwnd, message, wParam, lParam);
+    }
+
+    return 0;
+}
+
+static void gotoFrame()
+{
+    int lastFrameIndex = vantage_->imageVideoFrameCount_ - 1;
+    if (lastFrameIndex < 0) {
+        lastFrameIndex = 0;
+    }
+    dsPrintf(&gotoFrameInformative_, "(0-based, Last Frame Index: %d)", lastFrameIndex);
+    dsPrintf(&gotoFrameInput_, "%d", vantage_->imageVideoFrameIndex_);
+
+    INT_PTR result = DialogBox(hInstance_, MAKEINTRESOURCE(IDD_GOTOFRAME), hwnd_, GotoFrameProc);
+    if (result == IDOK) {
+        int typedFrameIndex = atoi(gotoFrameInput_);
+        vantageSetVideoFrameIndex(vantage_, typedFrameIndex);
+    }
+    SetActiveWindow(hwnd_);
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     PAINTSTRUCT ps;
@@ -263,11 +309,32 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case 51: // 3
                     vantageSetDiffMode(vantage_, DIFFMODE_SHOWDIFF);
                     break;
+                case 91: // [
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, -20);
+                    break;
+                case 93: // ]
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, 20);
+                    break;
+                case 59: // ;
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, -5);
+                    break;
+                case 39: // '
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, 5);
+                    break;
+                case 44: // , (<)
+                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ - 1);
+                    break;
+                case 46: // . (>)
+                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ + 1);
+                    break;
                 case 100: // D
                     diffOpen();
                     break;
                 case 102: // F
                     toggleFullscreen();
+                    break;
+                case 103: // G
+                    gotoFrame();
                     break;
                 case 111: // O
                     fileOpen();

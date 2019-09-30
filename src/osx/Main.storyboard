@@ -107,6 +107,49 @@
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="0iX-Rs-Ty6"/>
+                                        <menuItem title="Sequence Rewind 20%" keyEquivalent="[" id="6Cd-3G-w05">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sequenceRewind20:" target="Ady-hI-5gd" id="2GR-v6-iYz"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Sequence Advance 20%" keyEquivalent="]" id="QWS-87-16B">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sequenceAdvance20:" target="Ady-hI-5gd" id="ySq-Cj-3Gr"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Sequence Rewind 5%" keyEquivalent=";" id="OTr-Rt-EMf">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sequenceRewind5:" target="Ady-hI-5gd" id="wdr-2i-KMt"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Sequence Advance 5%" keyEquivalent="'" id="Ycg-rW-ouR">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sequenceAdvance5:" target="Ady-hI-5gd" id="pzB-Az-5YL"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Sequence Previous Frame" keyEquivalent="," id="CQF-gz-7qj">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sequencePreviousFrame:" target="Ady-hI-5gd" id="nR4-B0-iXW"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Sequence Next Frame" keyEquivalent="." id="Ngu-Xa-0pO">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sequenceNextFrame:" target="Ady-hI-5gd" id="1OB-oy-yk7"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Sequence Goto Frame" keyEquivalent="g" id="84O-3p-7VQ">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sequenceGotoFrame:" target="Ady-hI-5gd" id="qQM-4P-T5C"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="e0V-dE-3Hc"/>
                                         <menuItem title="Toggle SRGB Highlight" keyEquivalent="s" id="P3k-gl-1Wk">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>

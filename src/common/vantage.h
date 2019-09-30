@@ -91,6 +91,9 @@ typedef struct Vantage
     int imageWhiteLevel_;
     int imageHDR_;
     int imageDirty_;
+    int imageVideoFrameNextIndex_;
+    int imageVideoFrameIndex_;
+    int imageVideoFrameCount_;
     float imagePosX_; // x
     float imagePosY_; // y
     float imagePosW_; // width
@@ -136,6 +139,8 @@ void vantageAdjustThreshold(Vantage * V, int amount);
 void vantageSetDiffIntensity(Vantage * V, DiffIntensity diffIntensity);
 void vantageSetDiffMode(Vantage * V, DiffMode diffMode);
 void vantageToggleSrgbHighlight(Vantage * V);
+void vantageSetVideoFrameIndex(Vantage * V, int videoFrameIndex);
+void vantageSetVideoFrameIndexPercentOffset(Vantage * V, int percentOffset);
 
 // Positioning
 void vantageCalcCenteredImagePos(Vantage * V, float * posX, float * posY);

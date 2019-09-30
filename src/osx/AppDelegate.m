@@ -172,4 +172,46 @@
     [[NSNotificationCenter defaultCenter] postNotificationName:@"adjustThresholdP500" object:self];
 }
 
+// View / Sequence Rewind 20%
+- (IBAction)sequenceRewind20:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"sequenceRewind20" object:self];
+}
+
+// View / Sequence Advance 20%
+- (IBAction)sequenceAdvance20:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"sequenceAdvance20" object:self];
+}
+
+// View / Sequence Rewind 5%
+- (IBAction)sequenceRewind5:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"sequenceRewind5" object:self];
+}
+
+// View / Sequence Advance 5%
+- (IBAction)sequenceAdvance5:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"sequenceAdvance5" object:self];
+}
+
+// View / Sequence Previous Frame
+- (IBAction)sequencePreviousFrame:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"sequencePreviousFrame" object:self];
+}
+
+// View / Sequence Next Frame
+- (IBAction)sequenceNextFrame:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"sequenceNextFrame" object:self];
+}
+
+// View / Sequence Goto Frame...
+- (IBAction)sequenceGotoFrame:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"sequenceGotoFrame" object:self];
+}
+
 @end
