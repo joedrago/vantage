@@ -534,11 +534,15 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     // --------------------------------------------------------------------------------------------
     // Update Vantage
 
+#if 0
     float maxEDR = view_.window.screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
     // float curious = view_.window.screen.maximumExtendedDynamicRangeColorComponentValue;
     if (maxEDR < 1.0f) {
         maxEDR = 1.0f;
     }
+#else
+    float maxEDR = 1.0f;
+#endif
     vantagePlatformSetLinearMax(V, MACOS_SDR_WHITE_NITS * ((int)maxEDR));
 
     if (V->imageDirty_) {
