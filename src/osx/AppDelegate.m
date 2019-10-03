@@ -172,6 +172,12 @@
     [[NSNotificationCenter defaultCenter] postNotificationName:@"adjustThresholdP500" object:self];
 }
 
+// View / Refresh
+- (IBAction)refresh:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"refresh" object:self];
+}
+
 // View / Sequence Rewind 20%
 - (IBAction)sequenceRewind20:sender
 {

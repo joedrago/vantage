@@ -9,7 +9,6 @@
 #define IDI_VANTAGE                     107
 #define IDC_VANTAGE                     109
 #define IDR_MAINFRAME                   128
-#define IDD_DIALOG1                     129
 #define IDD_GOTOFRAME                   129
 #define IDC_INPUT                       1000
 #define ID_VIEW_FULLSCREEN              32771
@@ -44,6 +43,14 @@
 #define ID_DIFF_DIFFINTENSITY_DIFFONLY  32800
 #define ID_VIEW_TOGGLESRGBHIGHLIGHT     32801
 #define ID_VIEW_RESETIMAGEPOSITION      32802
+#define ID_VIEW_REFRESH                 32803
+#define ID_VIEW_SEQUENCEREWIND20        32804
+#define ID_VIEW_SEQUENCEADVANCE20       32805
+#define ID_VIEW_SEQUENCEREWIND5         32806
+#define ID_VIEW_SEQUENCEADVANCE5        32807
+#define ID_VIEW_SEQUENCEPREVIOUSFRAME   32808
+#define ID_VIEW_SEQUENCENEXTFRAME       32809
+#define ID_VIEW_SEQUENCEGOTOFRAME       32810
 #define IDC_STATIC                      -1
 #define IDC_INFORMATIVE                 -1
 
@@ -53,7 +60,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        130
-#define _APS_NEXT_COMMAND_VALUE         32803
+#define _APS_NEXT_COMMAND_VALUE         32811
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

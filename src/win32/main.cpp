@@ -405,6 +405,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case VK_PRIOR:
                     vantageAdjustThreshold(vantage_, 500);
                     break;
+                case VK_F5:
+                    vantageRefresh(vantage_);
+                    break;
             }
             break;
         }
@@ -413,6 +416,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             switch (LOWORD(wParam)) {
                 case IDM_EXIT:
                     PostQuitMessage(0);
+                    break;
+                case ID_VIEW_REFRESH:
+                    vantageRefresh(vantage_);
                     break;
                 case ID_VIEW_FULLSCREEN:
                     toggleFullscreen();
@@ -430,12 +436,34 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case ID_VIEW_NEXTIMAGE:
                     vantageLoad(vantage_, 1);
                     break;
-                case ID_DIFF_DIFFCURRENTIMAGEAGAINST:
-                    diffOpen();
-                    break;
 
+                case ID_VIEW_SEQUENCEREWIND20:
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, -20);
+                    break;
+                case ID_VIEW_SEQUENCEADVANCE20:
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, 20);
+                    break;
+                case ID_VIEW_SEQUENCEREWIND5:
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, -5);
+                    break;
+                case ID_VIEW_SEQUENCEADVANCE5:
+                    vantageSetVideoFrameIndexPercentOffset(vantage_, 5);
+                    break;
+                case ID_VIEW_SEQUENCEPREVIOUSFRAME:
+                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ - 1);
+                    break;
+                case ID_VIEW_SEQUENCENEXTFRAME:
+                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ + 1);
+                    break;
+                case ID_VIEW_SEQUENCEGOTOFRAME:
+                    gotoFrame();
+                    break;
                 case ID_VIEW_TOGGLESRGBHIGHLIGHT:
                     vantageToggleSrgbHighlight(vantage_);
+                    break;
+
+                case ID_DIFF_DIFFCURRENTIMAGEAGAINST:
+                    diffOpen();
                     break;
 
                 case ID_DIFF_SHOWIMAGE1:

@@ -65,6 +65,8 @@ typedef struct Vantage
     int imageFileIndex_;
 
     // Special mode state (diff, highlight)
+    char * diffFilename1_;
+    char * diffFilename2_;
     DiffMode diffMode_;
     DiffIntensity diffIntensity_;
     int diffThreshold_;
@@ -105,12 +107,19 @@ typedef struct Vantage
     int dragStartX_;
     int dragStartY_;
 
+    // Loading state (rendering hack)
+    int loadWaitFrames_;
+    int inReload_;
+
     // Text information
     double overlayDuration_;
     double overlayStart_;
     double overlayFade_;
     char ** overlay_;
     char ** info_;
+
+    // Temp buffers
+    char * tempTextBuffer_;
 
     // Rendering state
     Blit * blits_;
@@ -133,6 +142,7 @@ void vantageFileListAppend(Vantage * V, const char * filename);
 void vantageLoad(Vantage * V, int offset);
 void vantageLoadDiff(Vantage * V, const char * filename1, const char * filename2);
 void vantageUnload(Vantage * V);
+void vantageRefresh(Vantage * V);
 
 // Special mode state
 void vantageAdjustThreshold(Vantage * V, int amount);

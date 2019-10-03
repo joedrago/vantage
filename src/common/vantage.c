@@ -30,6 +30,9 @@ extern unsigned char monoBinaryData[];
 
 static const float MAX_SCALE = 32.0f;
 
+// How many frames to render "Loading..." before actually loading
+static const int LOADING_FRAMES = 3;
+
 // --------------------------------------------------------------------------------------
 // SMPTE ST.2084: https://ieeexplore.ieee.org/servlet/opac?punumber=7291450
 
@@ -66,6 +69,8 @@ Vantage * vantageCreate(void)
     V->filenames_ = NULL;
     V->imageFileIndex_ = 0;
 
+    V->diffFilename1_ = NULL;
+    V->diffFilename2_ = NULL;
     V->diffMode_ = DIFFMODE_SHOWDIFF;
     V->diffIntensity_ = DIFFINTENSITY_BRIGHT;
     V->diffThreshold_ = 0;
@@ -82,6 +87,10 @@ Vantage * vantageCreate(void)
     V->dragging_ = 0;
     V->dragStartX_ = -1;
     V->dragStartY_ = -1;
+
+    V->loadWaitFrames_ = 0;
+    V->inReload_ = 0;
+    V->tempTextBuffer_ = NULL;
 
     V->imageFileSize_ = 0;
     V->imageFileSize2_ = 0;
@@ -119,7 +128,14 @@ Vantage * vantageCreate(void)
 void vantageDestroy(Vantage * V)
 {
     vantageUnload(V);
+    if (V->imageFont_) {
+        clImageDestroy(V->C, V->imageFont_);
+        V->imageFont_ = NULL;
+    }
     clContextDestroy(V->C);
+    dsDestroy(&V->diffFilename1_);
+    dsDestroy(&V->diffFilename2_);
+    dsDestroy(&V->tempTextBuffer_);
     daDestroy(&V->filenames_, dsDestroyIndirect);
     daDestroy(&V->overlay_, dsDestroyIndirect);
     daDestroy(&V->info_, dsDestroyIndirect);
@@ -176,6 +192,22 @@ void vantageKillOverlay(Vantage * V)
 // --------------------------------------------------------------------------------------
 // Load
 
+static int vantageCanLoad(Vantage * V)
+{
+    if (V->inReload_) {
+        return 1;
+    }
+    V->loadWaitFrames_ = LOADING_FRAMES;
+    // if (V->loadWaitFrames_ == 0) {
+    //     V->loadWaitFrames_ = LOADING_FRAMES;
+    //     return 0;
+    // }
+    // if (V->loadWaitFrames_ > 0) {
+    //     return 0;
+    // }
+    return 0;
+}
+
 void vantageFileListClear(Vantage * V)
 {
     daClear(&V->filenames_, dsDestroyIndirect);
@@ -194,7 +226,8 @@ void vantageLoad(Vantage * V, int offset)
         return;
     }
 
-    clearOverlay(V);
+    dsDestroy(&V->diffFilename1_);
+    dsDestroy(&V->diffFilename2_);
 
     int loadIndex = V->imageFileIndex_ + offset;
     if (loadIndex < 0) {
@@ -204,6 +237,13 @@ void vantageLoad(Vantage * V, int offset)
         loadIndex = 0;
     }
     V->imageFileIndex_ = loadIndex;
+
+    if (!vantageCanLoad(V)) {
+        return;
+    }
+
+    vantageUnload(V);
+    clearOverlay(V);
 
     char * filename = V->filenames_[V->imageFileIndex_];
 
@@ -245,14 +285,26 @@ void vantageLoad(Vantage * V, int offset)
 
 void vantageLoadDiff(Vantage * V, const char * filename1, const char * filename2)
 {
+    if (filename1 && filename2) {
+        dsCopy(&V->diffFilename1_, filename1);
+        dsCopy(&V->diffFilename2_, filename2);
+    }
+    if (!V->diffFilename1_ || !V->diffFilename2_) {
+        return;
+    }
+    if (!vantageCanLoad(V)) {
+        return;
+    }
+
+    vantageUnload(V);
     vantageFileListClear(V);
     clearOverlay(V);
 
     const char * failureReason = NULL;
-    V->imageFileSize_ = clFileSize(filename1);
-    V->imageFileSize2_ = clFileSize(filename2);
-    V->image_ = clContextRead(V->C, filename1, NULL, NULL);
-    V->image2_ = clContextRead(V->C, filename2, NULL, NULL);
+    V->imageFileSize_ = clFileSize(V->diffFilename1_);
+    V->imageFileSize2_ = clFileSize(V->diffFilename2_);
+    V->image_ = clContextRead(V->C, V->diffFilename1_, NULL, NULL);
+    V->image2_ = clContextRead(V->C, V->diffFilename2_, NULL, NULL);
     if (!V->image_ || !V->image2_) {
         failureReason = "Both failed to load";
     } else if (!V->image_) {
@@ -264,21 +316,21 @@ void vantageLoadDiff(Vantage * V, const char * filename1, const char * filename2
     }
 
     // Trim all matching portions from the front of the names
-    const char * short1 = filename1;
-    const char * short2 = filename2;
+    const char * short1 = V->diffFilename1_;
+    const char * short2 = V->diffFilename2_;
     while (*short1 && (*short1 == *short2)) {
         ++short1;
         ++short2;
     }
     // now walk back the pointers to the nearest path separator, if any
-    while (short1 != filename1) {
+    while (short1 != V->diffFilename1_) {
         --short1;
         if (*short1 == '\\') {
             ++short1;
             break;
         }
     }
-    while (short2 != filename2) {
+    while (short2 != V->diffFilename2_) {
         --short2;
         if (*short2 == '\\') {
             ++short2;
@@ -314,10 +366,6 @@ void vantageUnload(Vantage * V)
         clImageDestroy(V->C, V->image2_);
         V->image2_ = NULL;
     }
-    if (V->imageFont_) {
-        clImageDestroy(V->C, V->imageFont_);
-        V->imageFont_ = NULL;
-    }
     if (V->imageDiff_) {
         clImageDiffDestroy(V->C, V->imageDiff_);
         V->imageDiff_ = NULL;
@@ -340,6 +388,23 @@ void vantageUnload(Vantage * V)
     V->imageInfoX_ = -1;
     V->imageInfoY_ = -1;
     V->imageDirty_ = 1;
+}
+
+static void vantageReload(Vantage * V)
+{
+    V->inReload_ = 1;
+    if ((dsLength(&V->diffFilename1_) > 0) && (dsLength(&V->diffFilename2_) > 0)) {
+        vantageLoadDiff(V, NULL, NULL);
+    } else if (daSize(&V->filenames_) > 0) {
+        vantageLoad(V, 0);
+    }
+    V->inReload_ = 0;
+}
+
+void vantageRefresh(Vantage * V)
+{
+    V->loadWaitFrames_ = LOADING_FRAMES;
+    V->imageVideoFrameNextIndex_ = V->imageVideoFrameIndex_;
 }
 
 // --------------------------------------------------------------------------------------
@@ -864,8 +929,6 @@ static void vantageUpdateInfo(Vantage * V)
             } else {
                 appendInfo(V, "File Size      : %d bytes", fileSize);
             }
-        } else {
-            appendInfo(V, "");
         }
 
         if (V->imageDiff_) {
@@ -977,9 +1040,54 @@ static void vantageUpdateInfo(Vantage * V)
     }
 }
 
+static float vantageScaleTextLuminance(Vantage * V, float lum)
+{
+    if (V->platformHDRActive_) {
+        // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
+        lum = powf(lum, 2.2f);
+        if (V->platformLinearMax_ > 0) {
+            lum *= (float)V->platformWhiteLevel_ / (float)V->platformLinearMax_;
+        } else {
+            lum *= (float)V->platformWhiteLevel_ / 10000.0f;
+            lum = PQ_OETF(lum);
+        }
+    }
+    return lum;
+}
+
 void vantageRender(Vantage * V)
 {
+    static const float fontHeight = 18.0f;
+    static const float nextLine = 20.0f;
+
     daClear(&V->blits_, NULL);
+
+    if (V->loadWaitFrames_ > 0) {
+        --V->loadWaitFrames_;
+        if (V->loadWaitFrames_ == 0) {
+            vantageReload(V);
+        }
+
+        float lum = vantageScaleTextLuminance(V, 1.0f);
+        Color loadingTextColor = { lum, lum, lum, 1.0f };
+        dsClear(&V->tempTextBuffer_);
+        if ((dsLength(&V->diffFilename1_) > 0) && (dsLength(&V->diffFilename2_) > 0)) {
+            dsPrintf(&V->tempTextBuffer_, "Loading Diff: %s, %s", V->diffFilename1_, V->diffFilename2_);
+        } else if ((daSize(&V->filenames_) > 0) && (V->imageFileIndex_ >= 0) && (V->imageFileIndex_ < (int)daSize(&V->filenames_))) {
+            if (V->imageVideoFrameNextIndex_ > 0) {
+                dsPrintf(&V->tempTextBuffer_,
+                         "[%d/%d] Loading: %s @ Frame %d",
+                         V->imageFileIndex_ + 1,
+                         daSize(&V->filenames_),
+                         V->filenames_[V->imageFileIndex_],
+                         V->imageVideoFrameNextIndex_);
+            } else {
+                dsPrintf(&V->tempTextBuffer_, "[%d/%d] Loading: %s", V->imageFileIndex_ + 1, daSize(&V->filenames_), V->filenames_[V->imageFileIndex_]);
+            }
+        }
+        vantageBlitString(V, V->tempTextBuffer_, 10, 10, fontHeight, &loadingTextColor);
+        return;
+    }
 
     if ((V->platformHDRActive_ != V->imageHDR_) || (V->imageWhiteLevel_ != V->platformWhiteLevel_)) {
         vantagePrepareImage(V);
@@ -1011,8 +1119,6 @@ void vantageRender(Vantage * V)
         const float infoW = 360.0f;
         float left = (clientW - infoW);
         float top = 10.0f;
-        float fontHeight = 18.0f;
-        float nextLine = fontHeight + 2.0f;
 
         if (daSize(&V->info_) > 3) {
             float blackW = infoW;
@@ -1021,44 +1127,69 @@ void vantageRender(Vantage * V)
             vantageFill(V, left, 0, blackW, blackH, &black);
         }
 
-        float lum = 1.0f;
+        float alpha = 1.0f;
         if (dt > (V->overlayDuration_ - V->overlayFade_)) {
-            lum = (float)(V->overlayFade_ - (dt - (V->overlayDuration_ - V->overlayFade_)));
+            alpha = (float)(V->overlayFade_ - (dt - (V->overlayDuration_ - V->overlayFade_)));
         }
+        float lum = vantageScaleTextLuminance(V, 1.0f);
+        Color color = { lum, lum, lum, alpha };
 
-        if (V->platformHDRActive_) {
-            // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
-            lum = powf(lum, 2.2f);
-            if (V->platformLinearMax_ > 0) {
-                lum *= (float)V->platformWhiteLevel_ / (float)V->platformLinearMax_;
-            } else {
-                lum *= (float)V->platformWhiteLevel_ / 10000.0f;
-                lum = PQ_OETF(lum);
+        // Draw the bottom left
+        {
+            float blTop = clientH - 25.0f;
+            clProfile * profile = NULL;
+            if (V->image_) {
+                if (V->imageDiff_) {
+                    switch (V->diffMode_) {
+                        case DIFFMODE_SHOW1:
+                            profile = V->image_->profile;
+                            break;
+                        case DIFFMODE_SHOW2:
+                            profile = V->image2_->profile;
+                            break;
+                        case DIFFMODE_SHOWDIFF:
+                            break;
+                    }
+                } else {
+                    profile = V->image_->profile;
+                }
             }
-        }
+            if (profile) {
+                char profileDescription[256];
+                clProfileDescribe(V->C, profile, profileDescription, sizeof(profileDescription));
+                const char * profileName = profile->description ? profile->description : "";
+                dsPrintf(&V->tempTextBuffer_, "Profile: %s (%s)", profileName, profileDescription);
+                vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
+                blTop -= nextLine;
+            }
 
-        Color color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        color.a = lum;
+            int sdrWhite = V->platformWhiteLevel_;
+            dsClear(&V->tempTextBuffer_);
+            if (V->platformHDRActive_) {
+                dsConcatf(&V->tempTextBuffer_,
+                          "HDR    : Active ([0-%d] nits, SDR @ %d nits",
+                          (V->platformLinearMax_ > 0) ? V->platformLinearMax_ : 10000,
+                          sdrWhite);
+            } else {
+                dsConcatf(&V->tempTextBuffer_, "HDR    : Inactive ([0-%d] nits", sdrWhite);
+            }
+            if (showHLG) {
+                dsConcatf(&V->tempTextBuffer_, ", HLG peak: %d nits)", clTransformCalcHLGLuminance(sdrWhite));
+            } else {
+                dsConcatf(&V->tempTextBuffer_, ")");
+            }
+            vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
+            blTop -= nextLine;
 
-        char * luminanceDisplay = NULL;
-        int sdrWhite = V->platformWhiteLevel_;
-        dsConcatf(&luminanceDisplay, "SDR: %d nits", sdrWhite);
-        if (showHLG) {
-            dsConcatf(&luminanceDisplay, ", HLG peak: %d nits", clTransformCalcHLGLuminance(sdrWhite));
-        }
-        if (V->platformHDRActive_) {
-            dsConcatf(&luminanceDisplay, ", HDR: Active (%d nits cap)", (V->platformLinearMax_ > 0) ? V->platformLinearMax_ : 10000);
-        } else {
-            dsConcatf(&luminanceDisplay, ", HDR: Inactive");
-        }
-        vantageBlitString(V, luminanceDisplay, 10, clientH - 25.0f, fontHeight, &color);
-        dsDestroy(&luminanceDisplay);
-
-        if (V->imageVideoFrameCount_ > 1) {
-            char * frameCountDisplay = NULL;
-            dsConcatf(&frameCountDisplay, "Frm: %d / %d (%d total)", V->imageVideoFrameIndex_, V->imageVideoFrameCount_ - 1, V->imageVideoFrameCount_);
-            vantageBlitString(V, frameCountDisplay, 10, clientH - 45.0f, fontHeight, &color);
-            dsDestroy(&frameCountDisplay);
+            if (V->imageVideoFrameCount_ > 1) {
+                dsClear(&V->tempTextBuffer_);
+                dsConcatf(&V->tempTextBuffer_,
+                          "Frame  : %d / %d (%d total)",
+                          V->imageVideoFrameIndex_,
+                          V->imageVideoFrameCount_ - 1,
+                          V->imageVideoFrameCount_);
+                vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
+            }
         }
 
         for (int i = 0; i < daSize(&V->overlay_); ++i) {

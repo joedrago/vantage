@@ -175,6 +175,7 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     [center addObserver:self selector:@selector(adjustThresholdP5:) name:@"adjustThresholdP5" object:nil];
     [center addObserver:self selector:@selector(adjustThresholdP50:) name:@"adjustThresholdP50" object:nil];
     [center addObserver:self selector:@selector(adjustThresholdP500:) name:@"adjustThresholdP500" object:nil];
+    [center addObserver:self selector:@selector(refresh:) name:@"refresh" object:nil];
     [center addObserver:self selector:@selector(sequenceRewind20:) name:@"sequenceRewind20" object:nil];
     [center addObserver:self selector:@selector(sequenceAdvance20:) name:@"sequenceAdvance20" object:nil];
     [center addObserver:self selector:@selector(sequenceRewind5:) name:@"sequenceRewind5" object:nil];
@@ -338,6 +339,11 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
 - (void)adjustThresholdP500:(NSNotification *)notification
 {
     vantageAdjustThreshold(V, 500);
+}
+
+- (void)refresh:(NSNotification *)notification
+{
+    vantageRefresh(V);
 }
 
 - (void)sequenceRewind20:(NSNotification *)notification
