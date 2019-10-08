@@ -13,6 +13,7 @@ Build Notes:
 * Hook up AppIcon in General tab (TODO: figure out why this isn't automatic)
 * Make sure codesigning is setup right
 * Make sure hardening is enabled
+* Make sure Version and Deployment Target are correct in General
 
 Xcode Notes:
 

@@ -51,14 +51,33 @@ typedef struct Blit
     BlitMode mode;
 } Blit;
 
+typedef enum ControlType
+{
+    CONTROLTYPE_SLIDER = 0
+} ControlType;
+
+typedef enum ControlFlags
+{
+    CONTROLFLAG_PREPARE = (1 << 0),
+    CONTROLFLAG_RELOAD = (1 << 1),
+} ControlFlags;
+
+typedef struct Control
+{
+    ControlType type;
+    int x, y, w, h;
+    int min, max, step;
+    int * value;
+    uint32_t flags;
+} Control;
+
 typedef struct Vantage
 {
     // Owned/set by platform
     int platformW_;
     int platformH_;
-    int platformWhiteLevel_;
     int platformHDRActive_;
-    int platformLinearMax_;
+    int platformLinear_;
 
     // List of filenames to cycle through (arrow keys)
     char ** filenames_;
@@ -71,6 +90,7 @@ typedef struct Vantage
     DiffIntensity diffIntensity_;
     int diffThreshold_;
     int srgbHighlight_;
+    int srgbLuminance_;
 
     // Colorist objects
     clContext * C;
@@ -90,7 +110,6 @@ typedef struct Vantage
     int imageFileSize2_;
     int imageInfoX_;
     int imageInfoY_;
-    int imageWhiteLevel_;
     int imageHDR_;
     int imageDirty_;
     int imageVideoFrameNextIndex_;
@@ -104,8 +123,13 @@ typedef struct Vantage
 
     // Mouse tracking
     int dragging_;
-    int dragStartX_;
-    int dragStartY_;
+    int dragLastX_;
+    int dragLastY_;
+    Control * dragControl_;
+
+    // Sliders
+    Control srgbLuminanceSlider_;
+    Control imageVideoFrameIndexSlider_;
 
     // Loading state (rendering hack)
     int loadWaitFrames_;
@@ -116,13 +140,18 @@ typedef struct Vantage
     double overlayStart_;
     double overlayFade_;
     char ** overlay_;
-    char ** info_;
 
     // Temp buffers
     char * tempTextBuffer_;
 
     // Rendering state
     Blit * blits_;
+    Control ** activeControls_;
+    float nextLineX_;
+    float nextLineY_;
+    float nextLineFontSize_;
+    float nextLineHeight_;
+    Color nextLineColor_;
 
     // Glyph information
     dynMap * glyphs_;
@@ -168,8 +197,7 @@ void vantageMouseWheel(Vantage * V, int x, int y, float delta);
 // Platform hooks
 void vantagePlatformSetHDRActive(Vantage * V, int hdrActive);
 void vantagePlatformSetSize(Vantage * V, int width, int height);
-void vantagePlatformSetWhiteLevel(Vantage * V, int whiteLevel);
-void vantagePlatformSetLinearMax(Vantage * V, int linearMax); // If 0, use PQ, otherwise use Linear, tonemapped to linearMax nits
+void vantagePlatformSetLinear(Vantage * V, int linear); // 0=PQ, 1=Linear
 
 // Rendering
 void vantagePrepareImage(Vantage * V);

@@ -33,6 +33,15 @@ static const float MAX_SCALE = 32.0f;
 // How many frames to render "Loading..." before actually loading
 static const int LOADING_FRAMES = 3;
 
+// How arbitrarily bright (in nits) to tonemap down HDR content to display on a non-HDR display
+static const int SDR_TONEMAPPED_LUMINANCE = 200;
+
+// SRGB luminance slider
+static const int SRGB_LUMINANCE_MIN = 1;
+static const int SRGB_LUMINANCE_DEF = 80;
+static const int SRGB_LUMINANCE_MAX = 1000;
+static const int SRGB_LUMINANCE_STEP = 5;
+
 // --------------------------------------------------------------------------------------
 // SMPTE ST.2084: https://ieeexplore.ieee.org/servlet/opac?punumber=7291450
 
@@ -53,17 +62,30 @@ static float PQ_OETF(float L)
 }
 
 // --------------------------------------------------------------------------------------
+// Control helpers
+
+static void controlInitSlider(Control * control, int * value, int min, int max, int step, uint32_t flags)
+{
+    memset(control, 0, sizeof(Control));
+    control->type = CONTROLTYPE_SLIDER;
+    control->value = value;
+    control->min = min;
+    control->max = max;
+    control->step = step;
+    control->flags = flags;
+}
+
+// --------------------------------------------------------------------------------------
 // Creation / destruction
 
 Vantage * vantageCreate(void)
 {
     Vantage * V = (Vantage *)malloc(sizeof(Vantage));
 
-    V->platformWhiteLevel_ = 1;
     V->platformW_ = 1;
     V->platformH_ = 1;
     V->platformHDRActive_ = 0;
-    V->platformLinearMax_ = 0; // PQ by default
+    V->platformLinear_ = 0; // PQ by default
 
     V->C = clContextCreate(NULL);
     V->filenames_ = NULL;
@@ -75,6 +97,7 @@ Vantage * vantageCreate(void)
     V->diffIntensity_ = DIFFINTENSITY_BRIGHT;
     V->diffThreshold_ = 0;
     V->srgbHighlight_ = 0;
+    V->srgbLuminance_ = SRGB_LUMINANCE_DEF;
 
     V->image_ = NULL;
     V->image2_ = NULL;
@@ -85,8 +108,9 @@ Vantage * vantageCreate(void)
     V->highlightInfo_ = NULL;
 
     V->dragging_ = 0;
-    V->dragStartX_ = -1;
-    V->dragStartY_ = -1;
+    V->dragLastX_ = 0;
+    V->dragLastY_ = 0;
+    V->dragControl_ = NULL;
 
     V->loadWaitFrames_ = 0;
     V->inReload_ = 0;
@@ -110,6 +134,13 @@ Vantage * vantageCreate(void)
     V->blits_ = NULL;
     daCreate(&V->blits_, sizeof(Blit));
 
+    V->dragControl_ = NULL;
+    V->activeControls_ = NULL;
+    daCreate(&V->activeControls_, 0);
+
+    controlInitSlider(&V->srgbLuminanceSlider_, &V->srgbLuminance_, SRGB_LUMINANCE_MIN, SRGB_LUMINANCE_MAX, SRGB_LUMINANCE_STEP, CONTROLFLAG_PREPARE);
+    controlInitSlider(&V->imageVideoFrameIndexSlider_, &V->imageVideoFrameIndex_, 0, 0, 1, CONTROLFLAG_RELOAD);
+
     V->glyphs_ = dmCreate(DKF_INTEGER, 0);
     int glyphCount = sizeof(monoGlyphs) / sizeof(monoGlyphs[0]);
     for (int i = 0; i < glyphCount; ++i) {
@@ -121,7 +152,6 @@ Vantage * vantageCreate(void)
     V->overlayStart_ = now();
     V->overlayDuration_ = 30.0f;
     V->overlayFade_ = 1.0f;
-    V->info_ = NULL;
     return V;
 }
 
@@ -138,8 +168,8 @@ void vantageDestroy(Vantage * V)
     dsDestroy(&V->tempTextBuffer_);
     daDestroy(&V->filenames_, dsDestroyIndirect);
     daDestroy(&V->overlay_, dsDestroyIndirect);
-    daDestroy(&V->info_, dsDestroyIndirect);
     daDestroy(&V->blits_, NULL);
+    daDestroy(&V->activeControls_, NULL);
     free(V);
 }
 
@@ -163,18 +193,6 @@ static void appendOverlay(Vantage * V, const char * format, ...)
     daPush(&V->overlay_, appendMe);
 
     vantageKickOverlay(V);
-}
-
-static void appendInfo(Vantage * V, const char * format, ...)
-{
-    va_list args;
-    va_start(args, format);
-
-    char * appendMe = NULL;
-    dsConcatv(&appendMe, format, args);
-    va_end(args);
-
-    daPush(&V->info_, appendMe);
 }
 
 void vantageKickOverlay(Vantage * V)
@@ -257,6 +275,8 @@ void vantageLoad(Vantage * V, int offset)
     V->image_ = clContextRead(V->C, filename, NULL, &outFormatName);
     V->imageVideoFrameIndex_ = V->C->readExtraInfo.frameIndex;
     V->imageVideoFrameCount_ = V->C->readExtraInfo.frameCount;
+    V->imageVideoFrameIndexSlider_.min = 0;
+    V->imageVideoFrameIndexSlider_.max = (V->imageVideoFrameCount_ > 0) ? V->imageVideoFrameCount_ - 1 : 0;
     if (!outFormatName) {
         outFormatName = "Unknown";
     }
@@ -543,10 +563,56 @@ void vantageResetImagePos(Vantage * V)
 }
 
 // --------------------------------------------------------------------------------------
+// Control handling
+
+static void vantageControlClick(Vantage * V, Control * control, int x, int y)
+{
+    int pos = x - control->x;
+    pos = CL_CLAMP(pos, 0, control->w);
+
+    float offset = 0.0f;
+    if (control->w > 0) {
+        offset = (float)pos / (float)control->w;
+    }
+
+    float range = (float)(control->max - control->min);
+    if (range > 0) {
+        *control->value = control->step * (int)floorf(0.5f + ((control->min + (int)(offset * range)) / control->step));
+        *control->value = CL_CLAMP(*control->value, control->min, control->max);
+    } else {
+        *control->value = control->min;
+    }
+
+    vantageKickOverlay(V);
+}
+
+static Control * vantageControlFromPoint(Vantage * V, int x, int y)
+{
+    for (int i = 0; i < daSize(&V->activeControls_); ++i) {
+        Control * control = V->activeControls_[i];
+        if (x < control->x)
+            continue;
+        if (y < control->y)
+            continue;
+        if (x > (control->x + control->w))
+            continue;
+        if (y > (control->y + control->h))
+            continue;
+
+        return control;
+    }
+    return NULL;
+}
+
+// --------------------------------------------------------------------------------------
 // Mouse handling
 
 void vantageMouseLeftDoubleClick(Vantage * V, int x, int y)
 {
+    if (vantageControlFromPoint(V, x, y)) {
+        return;
+    }
+
     const float scaleTiers[] = { 1.0f, 2.0f, 4.0f, 8.0f, 16.0f, 32.0f };
     const int scaleTierCount = sizeof(scaleTiers) / sizeof(scaleTiers[0]);
     int scaleIndex = 0;
@@ -568,30 +634,53 @@ void vantageMouseLeftDoubleClick(Vantage * V, int x, int y)
 
 void vantageMouseLeftDown(Vantage * V, int x, int y)
 {
+    V->dragLastX_ = x;
+    V->dragLastY_ = y;
+
+    Control * control = vantageControlFromPoint(V, x, y);
+    if (control) {
+        V->dragControl_ = control;
+        vantageControlClick(V, V->dragControl_, x, y);
+        return;
+    }
+
     V->dragging_ = 1;
-    V->dragStartX_ = x;
-    V->dragStartY_ = y;
 }
 
 void vantageMouseLeftUp(Vantage * V, int x, int y)
 {
-    (void)x;
-    (void)y;
+    if ((x == -1) && (y == -1)) {
+        x = V->dragLastX_;
+        y = V->dragLastY_;
+    }
+
+    if (V->dragControl_) {
+        vantageControlClick(V, V->dragControl_, x, y);
+        if (V->dragControl_->flags & CONTROLFLAG_RELOAD) {
+            vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_);
+        } else if (V->dragControl_->flags & CONTROLFLAG_PREPARE) {
+            vantagePrepareImage(V);
+        }
+
+        V->dragControl_ = NULL;
+    }
 
     V->dragging_ = 0;
 }
 
 void vantageMouseMove(Vantage * V, int x, int y)
 {
-    if (V->dragging_) {
-        float dx = (float)(x - V->dragStartX_);
-        float dy = (float)(y - V->dragStartY_);
+    if (V->dragControl_) {
+        vantageControlClick(V, V->dragControl_, x, y);
+    } else if (V->dragging_) {
+        float dx = (float)(x - V->dragLastX_);
+        float dy = (float)(y - V->dragLastY_);
         V->imagePosX_ += dx;
         V->imagePosY_ += dy;
-
-        V->dragStartX_ = x;
-        V->dragStartY_ = y;
     }
+
+    V->dragLastX_ = x;
+    V->dragLastY_ = y;
 }
 
 void vantageMouseSetPos(Vantage * V, int x, int y)
@@ -616,6 +705,10 @@ void vantageMouseSetPos(Vantage * V, int x, int y)
 
 void vantageMouseWheel(Vantage * V, int x, int y, float delta)
 {
+    if (vantageControlFromPoint(V, x, y)) {
+        return;
+    }
+
     V->imagePosS_ += delta;
     if (V->imagePosS_ < 1.0f) {
         V->imagePosS_ = 1.0f;
@@ -650,18 +743,10 @@ void vantagePlatformSetSize(Vantage * V, int width, int height)
     vantageResetImagePos(V);
 }
 
-void vantagePlatformSetWhiteLevel(Vantage * V, int whiteLevel)
+void vantagePlatformSetLinear(Vantage * V, int linear)
 {
-    if (V->platformWhiteLevel_ != whiteLevel) {
-        V->platformWhiteLevel_ = whiteLevel;
-        vantagePrepareImage(V);
-    }
-}
-
-void vantagePlatformSetLinearMax(Vantage * V, int linearMax)
-{
-    if (V->platformLinearMax_ != linearMax) {
-        V->platformLinearMax_ = linearMax;
+    if (V->platformLinear_ != linear) {
+        V->platformLinear_ = linear;
         vantagePrepareImage(V);
     }
 }
@@ -678,8 +763,7 @@ void vantagePrepareImage(Vantage * V)
 
     clImage * srcImage = NULL;
 
-    unsigned int sdrWhite = V->platformWhiteLevel_;
-    V->C->defaultLuminance = sdrWhite;
+    V->C->defaultLuminance = SDR_TONEMAPPED_LUMINANCE;
 
     if (V->image_ && V->image2_) {
         if (!clProfileMatches(V->C, V->image_->profile, V->image2_->profile) || (V->image_->depth != V->image2_->depth)) {
@@ -743,7 +827,7 @@ void vantagePrepareImage(Vantage * V)
             V->highlightInfo_ = NULL;
         }
         V->highlightInfo_ = clImageSRGBHighlightPixelInfoCreate(V->C, srcImage->width * srcImage->height);
-        V->imageHighlight_ = clImageCreateSRGBHighlight(V->C, srcImage, sdrWhite, &V->highlightStats_, V->highlightInfo_, NULL);
+        V->imageHighlight_ = clImageCreateSRGBHighlight(V->C, srcImage, V->srgbLuminance_, &V->highlightStats_, V->highlightInfo_, NULL);
         srcImage = V->imageHighlight_;
     }
 
@@ -754,12 +838,10 @@ void vantagePrepareImage(Vantage * V)
         int dstLuminance = 10000;
         if (V->platformHDRActive_) {
             clContextGetStockPrimaries(V->C, "bt2020", &primaries);
-            if (V->platformLinearMax_ > 0) {
+            if (V->platformLinear_) {
                 curve.type = CL_PCT_GAMMA;
-                dstLuminance = V->platformLinearMax_;
             } else {
                 curve.type = CL_PCT_PQ;
-                dstLuminance = 10000;
             }
             curve.implicitScale = 1.0f;
             curve.gamma = 1.0f;
@@ -768,11 +850,10 @@ void vantagePrepareImage(Vantage * V)
             clContextGetStockPrimaries(V->C, "bt709", &primaries);
             curve.type = CL_PCT_GAMMA;
             curve.gamma = 2.2f;
-            dstLuminance = sdrWhite;
+            dstLuminance = SDR_TONEMAPPED_LUMINANCE;
             V->imageHDR_ = 0;
         }
         curve.implicitScale = 1.0f;
-        V->imageWhiteLevel_ = sdrWhite;
 
         clProfile * profile = clProfileCreate(V->C, &primaries, &curve, dstLuminance, NULL);
         V->preparedImage_ = clImageConvert(V->C, srcImage, V->C->params.jobs, 16, profile, CL_TONEMAP_AUTO);
@@ -805,7 +886,7 @@ static void vantageBlitImage(Vantage * V, float dx, float dy, float dw, float dh
     daPush(&V->blits_, blit);
 }
 
-static void vantageFill(Vantage * V, float dx, float dy, float dw, float dh, Color * color)
+static void vantageFill(Vantage * V, float dx, float dy, float dw, float dh, const Color * color)
 {
     Blit blit;
     blit.sx = 0.0f;
@@ -890,10 +971,71 @@ void vantageBlitString(Vantage * V, const char * str, float x, float y, float he
     }
 }
 
-static void vantageUpdateInfo(Vantage * V)
+static float vantageScaleTextLuminance(Vantage * V, float lum)
 {
-    daClear(&V->info_, dsDestroyIndirect);
+    if (V->platformHDRActive_) {
+        // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
+        lum = powf(lum, 2.2f);
+        lum *= (float)SDR_TONEMAPPED_LUMINANCE / 10000.0f;
+        if (!V->platformLinear_) {
+            lum = PQ_OETF(lum);
+        }
+    }
+    return lum;
+}
 
+static void vantageRenderControl(Vantage * V, Control * control, float x, float y, float w, float h)
+{
+    if (control->type != CONTROLTYPE_SLIDER) {
+        return;
+    }
+
+    control->x = (int)x;
+    control->y = (int)y;
+    control->w = (int)w;
+    control->h = (int)h;
+    daPush(&V->activeControls_, control);
+
+    float lum = vantageScaleTextLuminance(V, 1.0f);
+    float halfLum = vantageScaleTextLuminance(V, 0.5f);
+    float qLum = vantageScaleTextLuminance(V, 0.25f);
+    Color barColor = { halfLum, halfLum, halfLum, 1.0f };
+    Color sliderColor = { lum, halfLum, qLum, 1.0f };
+    const float sideHeight = h / 2.0f;
+    const float barThickness = 4.0f;
+
+    float offset = 0.0f;
+    float range = (float)(control->max - control->min);
+    if (range > 0.0f) {
+        offset = (*control->value - control->min) / range;
+    }
+
+    if (*control->value == control->max) {
+        int a = 5;
+        ++a;
+    }
+
+    vantageFill(V, x, y + (h / 2) - (barThickness / 2), w, barThickness, &barColor);            // Middle
+    vantageFill(V, x, y + (h / 2) - (sideHeight / 2), barThickness, sideHeight, &barColor);     // Left side
+    vantageFill(V, x + w, y + (h / 2) - (sideHeight / 2), barThickness, sideHeight, &barColor); // Right side
+    vantageFill(V, x + (w * offset), y, barThickness, h, &sliderColor);                         // Slider
+}
+
+static void vantageRenderNextLine(Vantage * V, const char * format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    dsClear(&V->tempTextBuffer_);
+    dsConcatv(&V->tempTextBuffer_, format, args);
+    va_end(args);
+
+    vantageBlitString(V, V->tempTextBuffer_, V->nextLineX_, V->nextLineY_, V->nextLineFontSize_, &V->nextLineColor_);
+    V->nextLineY_ += V->nextLineHeight_;
+}
+
+static void vantageRenderInfo(Vantage * V, float left, float top, float fontHeight, float nextLine, Color * color)
+{
     if (V->image_) {
         int width = V->image_->width;
         int height = V->image_->height;
@@ -919,15 +1061,21 @@ static void vantageUpdateInfo(Vantage * V)
             fileSize = V->imageFileSize_;
         }
 
-        appendInfo(V, "Dimensions     : %dx%d (%d bpc)", width, height, depth);
+        V->nextLineX_ = left;
+        V->nextLineY_ = top;
+        V->nextLineFontSize_ = fontHeight;
+        V->nextLineHeight_ = nextLine;
+        V->nextLineColor_ = *color;
+
+        vantageRenderNextLine(V, "Dimensions     : %dx%d (%d bpc)", width, height, depth);
 
         if (fileSize > 0) {
             if (fileSize > (1024 * 1024)) {
-                appendInfo(V, "File Size      : %2.2f MB", (float)fileSize / (1024.0f * 1024.0f));
+                vantageRenderNextLine(V, "File Size      : %2.2f MB", (float)fileSize / (1024.0f * 1024.0f));
             } else if (fileSize > 1024) {
-                appendInfo(V, "File Size      : %2.2f KB", (float)fileSize / 1024.0f);
+                vantageRenderNextLine(V, "File Size      : %2.2f KB", (float)fileSize / 1024.0f);
             } else {
-                appendInfo(V, "File Size      : %d bytes", fileSize);
+                vantageRenderNextLine(V, "File Size      : %d bytes", fileSize);
             }
         }
 
@@ -944,38 +1092,36 @@ static void vantageUpdateInfo(Vantage * V)
                     showing = "Diff";
                     break;
             }
-            appendInfo(V, "Showing        : %s", showing);
+            vantageRenderNextLine(V, "Showing        : %s", showing);
         }
     }
 
     if ((V->imageInfoX_ != -1) && (V->imageInfoY_ != -1)) {
         clImagePixelInfo * pixelInfo = &V->pixelInfo_;
 
-        appendInfo(V, "");
-        appendInfo(V, "[%d, %d]", V->imageInfoX_, V->imageInfoY_);
-
-        appendInfo(V, "");
-        appendInfo(V, "Image Info:");
-        appendInfo(V, "  R Raw        : %d", pixelInfo->rawR);
-        appendInfo(V, "  G Raw        : %d", pixelInfo->rawG);
-        appendInfo(V, "  B Raw        : %d", pixelInfo->rawB);
-        appendInfo(V, "  A Raw        : %d", pixelInfo->rawA);
-        appendInfo(V, "  x            : %3.3f", pixelInfo->x);
-        appendInfo(V, "  y            : %3.3f", pixelInfo->y);
-        appendInfo(V, "  Y            : %3.3f", pixelInfo->Y);
-
+        vantageRenderNextLine(V, "");
+        vantageRenderNextLine(V, "[%d, %d]", V->imageInfoX_, V->imageInfoY_);
+        vantageRenderNextLine(V, "");
+        vantageRenderNextLine(V, "Image Info:");
+        vantageRenderNextLine(V, "  R Raw        : %d", pixelInfo->rawR);
+        vantageRenderNextLine(V, "  G Raw        : %d", pixelInfo->rawG);
+        vantageRenderNextLine(V, "  B Raw        : %d", pixelInfo->rawB);
+        vantageRenderNextLine(V, "  A Raw        : %d", pixelInfo->rawA);
+        vantageRenderNextLine(V, "  x            : %3.3f", pixelInfo->x);
+        vantageRenderNextLine(V, "  y            : %3.3f", pixelInfo->y);
+        vantageRenderNextLine(V, "  Y            : %3.3f", pixelInfo->Y);
         if (V->image2_) {
             pixelInfo = &V->pixelInfo2_;
 
-            appendInfo(V, "");
-            appendInfo(V, "Image Info (2):");
-            appendInfo(V, "  R Raw        : %d", pixelInfo->rawR);
-            appendInfo(V, "  G Raw        : %d", pixelInfo->rawG);
-            appendInfo(V, "  B Raw        : %d", pixelInfo->rawB);
-            appendInfo(V, "  A Raw        : %d", pixelInfo->rawA);
-            appendInfo(V, "  x            : %3.3f", pixelInfo->x);
-            appendInfo(V, "  y            : %3.3f", pixelInfo->y);
-            appendInfo(V, "  Y            : %3.3f", pixelInfo->Y);
+            vantageRenderNextLine(V, "");
+            vantageRenderNextLine(V, "Image Info (2):");
+            vantageRenderNextLine(V, "  R Raw        : %d", pixelInfo->rawR);
+            vantageRenderNextLine(V, "  G Raw        : %d", pixelInfo->rawG);
+            vantageRenderNextLine(V, "  B Raw        : %d", pixelInfo->rawB);
+            vantageRenderNextLine(V, "  A Raw        : %d", pixelInfo->rawA);
+            vantageRenderNextLine(V, "  x            : %3.3f", pixelInfo->x);
+            vantageRenderNextLine(V, "  y            : %3.3f", pixelInfo->y);
+            vantageRenderNextLine(V, "  Y            : %3.3f", pixelInfo->Y);
         }
     }
 
@@ -983,76 +1129,60 @@ static void vantageUpdateInfo(Vantage * V)
         if ((V->imageInfoX_ != -1) && (V->imageInfoY_ != -1)) {
             clImageSRGBHighlightPixel * highlightPixel =
                 &V->highlightInfo_->pixels[V->imageInfoX_ + (V->imageInfoY_ * V->image_->width)];
-            appendInfo(V, "");
-            appendInfo(V, "Pixel Highlight:");
-            appendInfo(V, "  Nits         : %2.2f", highlightPixel->nits);
-            appendInfo(V, "  SRGB Max Nits: %2.2f", highlightPixel->maxNits);
-            appendInfo(V, "  Overbright   : %2.2f%%", 100.0f * highlightPixel->nits / highlightPixel->maxNits);
-            appendInfo(V, "  Out of Gamut : %2.2f%%", 100.0f * highlightPixel->outOfGamut);
+            vantageRenderNextLine(V, "");
+            vantageRenderNextLine(V, "Pixel Highlight:");
+            vantageRenderNextLine(V, "  Nits         : %2.2f", highlightPixel->nits);
+            vantageRenderNextLine(V, "  SRGB Max Nits: %2.2f", highlightPixel->maxNits);
+            vantageRenderNextLine(V, "  Overbright   : %2.2f%%", 100.0f * highlightPixel->nits / highlightPixel->maxNits);
+            vantageRenderNextLine(V, "  Out of Gamut : %2.2f%%", 100.0f * highlightPixel->outOfGamut);
         }
-        appendInfo(V, "");
-        appendInfo(V, "Highlight Stats:");
-        appendInfo(V, "Total Pixels   : %d", V->image_->width * V->image_->height);
-        appendInfo(V,
-                   "  Overbright   : %d (%.1f%%)",
-                   V->highlightStats_.overbrightPixelCount,
-                   100.0f * V->highlightStats_.overbrightPixelCount / V->highlightStats_.pixelCount);
-        appendInfo(V,
-                   "  Out of Gamut : %d (%.1f%%)",
-                   V->highlightStats_.outOfGamutPixelCount,
-                   100.0f * V->highlightStats_.outOfGamutPixelCount / V->highlightStats_.pixelCount);
-        appendInfo(V,
-                   "  Both         : %d (%.1f%%)",
-                   V->highlightStats_.bothPixelCount,
-                   100.0f * V->highlightStats_.bothPixelCount / V->highlightStats_.pixelCount);
-        appendInfo(V,
-                   "  HDR Pixels   : %d (%.1f%%)",
-                   V->highlightStats_.hdrPixelCount,
-                   100.0f * V->highlightStats_.hdrPixelCount / V->highlightStats_.pixelCount);
-        appendInfo(V, "  Brightest    : [%d, %d]", V->highlightStats_.brightestPixelX, V->highlightStats_.brightestPixelY);
-        appendInfo(V, "                 %2.2f nits", V->highlightStats_.brightestPixelNits);
+        vantageRenderNextLine(V, "");
+        vantageRenderNextLine(V, "Highlight Stats:");
+        vantageRenderNextLine(V, "Total Pixels   : %d", V->image_->width * V->image_->height);
+        vantageRenderNextLine(V,
+                              "  Overbright   : %d (%.1f%%)",
+                              V->highlightStats_.overbrightPixelCount,
+                              100.0f * V->highlightStats_.overbrightPixelCount / V->highlightStats_.pixelCount);
+        vantageRenderNextLine(V,
+                              "  Out of Gamut : %d (%.1f%%)",
+                              V->highlightStats_.outOfGamutPixelCount,
+                              100.0f * V->highlightStats_.outOfGamutPixelCount / V->highlightStats_.pixelCount);
+        vantageRenderNextLine(V,
+                              "  Both         : %d (%.1f%%)",
+                              V->highlightStats_.bothPixelCount,
+                              100.0f * V->highlightStats_.bothPixelCount / V->highlightStats_.pixelCount);
+        vantageRenderNextLine(V,
+                              "  HDR Pixels   : %d (%.1f%%)",
+                              V->highlightStats_.hdrPixelCount,
+                              100.0f * V->highlightStats_.hdrPixelCount / V->highlightStats_.pixelCount);
+        vantageRenderNextLine(V, "  Brightest    : [%d, %d]", V->highlightStats_.brightestPixelX, V->highlightStats_.brightestPixelY);
+        vantageRenderNextLine(V, "                 %2.2f nits", V->highlightStats_.brightestPixelNits);
     }
 
     if (V->imageDiff_ && (V->diffMode_ == DIFFMODE_SHOWDIFF)) {
-        appendInfo(V, "");
-        appendInfo(V, "Threshold      : %d", V->diffThreshold_);
-        appendInfo(V, "Largest Diff   : %d", V->imageDiff_->largestChannelDiff);
-
+        vantageRenderNextLine(V, "");
+        vantageRenderNextLine(V, "Threshold      : %d", V->diffThreshold_);
+        vantageRenderNextLine(V, "Largest Diff   : %d", V->imageDiff_->largestChannelDiff);
         if ((V->imageInfoX_ != -1) && (V->imageInfoY_ != -1)) {
             int diff = V->imageDiff_->diffs[V->imageInfoX_ + (V->imageInfoY_ * V->imageDiff_->image->width)];
-            appendInfo(V, "Pixel Diff     : %d", diff);
+            vantageRenderNextLine(V, "Pixel Diff     : %d", diff);
         }
 
-        appendInfo(V, "");
-        appendInfo(V, "Total Pixels   : %d", V->image_->width * V->image_->height);
-        appendInfo(V,
-                   "Perfect Matches: %7d (%.1f%%)",
-                   V->imageDiff_->matchCount,
-                   (100.0f * (float)V->imageDiff_->matchCount / V->imageDiff_->pixelCount));
-        appendInfo(V,
-                   "Under Threshold: %7d (%.1f%%)",
-                   V->imageDiff_->underThresholdCount,
-                   (100.0f * (float)V->imageDiff_->underThresholdCount / V->imageDiff_->pixelCount));
-        appendInfo(V,
-                   "Over Threshold : %7d (%.1f%%)",
-                   V->imageDiff_->overThresholdCount,
-                   (100.0f * (float)V->imageDiff_->overThresholdCount / V->imageDiff_->pixelCount));
+        vantageRenderNextLine(V, "");
+        vantageRenderNextLine(V, "Total Pixels   : %d", V->image_->width * V->image_->height);
+        vantageRenderNextLine(V,
+                              "Perfect Matches: %7d (%.1f%%)",
+                              V->imageDiff_->matchCount,
+                              (100.0f * (float)V->imageDiff_->matchCount / V->imageDiff_->pixelCount));
+        vantageRenderNextLine(V,
+                              "Under Threshold: %7d (%.1f%%)",
+                              V->imageDiff_->underThresholdCount,
+                              (100.0f * (float)V->imageDiff_->underThresholdCount / V->imageDiff_->pixelCount));
+        vantageRenderNextLine(V,
+                              "Over Threshold : %7d (%.1f%%)",
+                              V->imageDiff_->overThresholdCount,
+                              (100.0f * (float)V->imageDiff_->overThresholdCount / V->imageDiff_->pixelCount));
     }
-}
-
-static float vantageScaleTextLuminance(Vantage * V, float lum)
-{
-    if (V->platformHDRActive_) {
-        // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
-        lum = powf(lum, 2.2f);
-        if (V->platformLinearMax_ > 0) {
-            lum *= (float)V->platformWhiteLevel_ / (float)V->platformLinearMax_;
-        } else {
-            lum *= (float)V->platformWhiteLevel_ / 10000.0f;
-            lum = PQ_OETF(lum);
-        }
-    }
-    return lum;
 }
 
 void vantageRender(Vantage * V)
@@ -1061,6 +1191,7 @@ void vantageRender(Vantage * V)
     static const float nextLine = 20.0f;
 
     daClear(&V->blits_, NULL);
+    daClear(&V->activeControls_, NULL);
 
     if (V->loadWaitFrames_ > 0) {
         --V->loadWaitFrames_;
@@ -1089,7 +1220,7 @@ void vantageRender(Vantage * V)
         return;
     }
 
-    if ((V->platformHDRActive_ != V->imageHDR_) || (V->imageWhiteLevel_ != V->platformWhiteLevel_)) {
+    if (V->platformHDRActive_ != V->imageHDR_) {
         vantagePrepareImage(V);
     }
 
@@ -1109,18 +1240,18 @@ void vantageRender(Vantage * V)
         }
     }
 
-    vantageUpdateInfo(V);
-
     double dt = now() - V->overlayStart_;
-    if (((daSize(&V->overlay_) > 0) || (daSize(&V->info_) > 0)) && (dt < V->overlayDuration_)) {
+    if ((daSize(&V->overlay_) > 0) && (dt < V->overlayDuration_)) {
         float clientW = (float)V->platformW_;
         float clientH = (float)V->platformH_;
 
         const float infoW = 360.0f;
+        const float infoMargin = 10.0f;
         float left = (clientW - infoW);
         float top = 10.0f;
 
-        if (daSize(&V->info_) > 3) {
+        if ((V->imageInfoX_ != -1) || (V->imageInfoY_ != -1) || V->srgbHighlight_ ||
+            (V->imageDiff_ && (V->diffMode_ == DIFFMODE_SHOWDIFF))) {
             float blackW = infoW;
             float blackH = clientH;
             Color black = { 0.0f, 0.0f, 0.0f, 0.8f };
@@ -1163,32 +1294,38 @@ void vantageRender(Vantage * V)
                 blTop -= nextLine;
             }
 
-            int sdrWhite = V->platformWhiteLevel_;
-            dsClear(&V->tempTextBuffer_);
-            if (V->platformHDRActive_) {
-                dsConcatf(&V->tempTextBuffer_,
-                          "HDR    : Active ([0-%d] nits, SDR @ %d nits",
-                          (V->platformLinearMax_ > 0) ? V->platformLinearMax_ : 10000,
-                          sdrWhite);
-            } else {
-                dsConcatf(&V->tempTextBuffer_, "HDR    : Inactive ([0-%d] nits", sdrWhite);
+            if (!V->platformHDRActive_) {
+                vantageBlitString(V, "HDR    : Inactive", 10, blTop, fontHeight, &color);
+                blTop -= nextLine;
             }
-            if (showHLG) {
-                dsConcatf(&V->tempTextBuffer_, ", HLG peak: %d nits)", clTransformCalcHLGLuminance(sdrWhite));
-            } else {
-                dsConcatf(&V->tempTextBuffer_, ")");
-            }
-            vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
-            blTop -= nextLine;
+        }
+
+        left += infoMargin; // right text margin
+
+        // Draw the bottom right (sliders)
+        {
+            float blTop = clientH - 25.0f;
 
             if (V->imageVideoFrameCount_ > 1) {
-                dsClear(&V->tempTextBuffer_);
-                dsConcatf(&V->tempTextBuffer_,
-                          "Frame  : %d / %d (%d total)",
-                          V->imageVideoFrameIndex_,
-                          V->imageVideoFrameCount_ - 1,
-                          V->imageVideoFrameCount_);
-                vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
+                vantageRenderControl(V, &V->imageVideoFrameIndexSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
+                blTop -= nextLine;
+
+                dsPrintf(&V->tempTextBuffer_,
+                         "Frame  : %d / %d (%d total)",
+                         V->imageVideoFrameIndex_,
+                         V->imageVideoFrameCount_ - 1,
+                         V->imageVideoFrameCount_);
+                vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
+                blTop -= nextLine;
+            }
+
+            if (V->srgbHighlight_) {
+                vantageRenderControl(V, &V->srgbLuminanceSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
+                blTop -= nextLine;
+
+                dsPrintf(&V->tempTextBuffer_, "SRGB Threshold : %d nit%s", V->srgbLuminance_, (V->srgbLuminance_ > 1) ? "s" : "");
+                vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
+                blTop -= nextLine;
             }
         }
 
@@ -1196,11 +1333,7 @@ void vantageRender(Vantage * V)
             vantageBlitString(V, V->overlay_[i], 10, top + (i * nextLine), fontHeight, &color);
         }
 
-        left += 10.0f; // margin
-        for (int i = 0; i < daSize(&V->info_); ++i) {
-            vantageBlitString(V, V->info_[i], left, top, fontHeight, &color);
-            top += nextLine;
-        }
+        vantageRenderInfo(V, left, top, fontHeight, nextLine, &color);
     }
 }
 

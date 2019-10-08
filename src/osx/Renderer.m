@@ -56,8 +56,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 
     V = view_.V;
 
-    vantagePlatformSetWhiteLevel(V, MACOS_SDR_WHITE_NITS);
-    vantagePlatformSetLinearMax(V, 10000);
+    vantagePlatformSetLinear(V, 1);
     vantagePlatformSetHDRActive(V, 1);
 
     // --------------------------------------------------------------------------------------------
@@ -603,7 +602,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
             uniforms.vertexScale.y = blit->dh;
             uniforms.vertexOffset.x = blit->dx;
             uniforms.vertexOffset.y = blit->dy;
-            uniforms.overrange = ((float)V->platformLinearMax_) / (float)MACOS_SDR_WHITE_NITS;
+            uniforms.overrange = 10000.0f / (float)MACOS_SDR_WHITE_NITS;
 
             [renderEncoder setRenderPipelineState:pipelineState_];
             [renderEncoder setCullMode:MTLCullModeNone];

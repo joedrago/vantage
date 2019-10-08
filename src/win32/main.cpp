@@ -518,6 +518,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
             vantageMouseLeftDown(vantage_, x, y);
+            SetCapture(hwnd_);
         } break;
 
         case WM_RBUTTONDOWN:
@@ -537,6 +538,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
             vantageMouseLeftUp(vantage_, x, y);
+            ReleaseCapture();
+        } break;
+
+        case WM_NCLBUTTONUP: {
+            vantageMouseLeftUp(vantage_, -1, -1);
+            ReleaseCapture();
         } break;
 
         case WM_MOUSEMOVE: {
@@ -653,6 +660,7 @@ static bool GetPathInfo(HMONITOR monitor, DISPLAYCONFIG_PATH_INFO * path_info)
     return false;
 }
 
+#if 0
 static unsigned int GetMonitorSDRWhiteLevel(HMONITOR monitor)
 {
     unsigned int ret = 80;
@@ -676,6 +684,7 @@ static unsigned int sdrWhiteLevel()
     HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
     return GetMonitorSDRWhiteLevel(monitor);
 }
+#endif
 
 static void resizeSwapChain(bool initializing)
 {
@@ -1147,7 +1156,6 @@ static void destroyDevice()
 
 static void render()
 {
-    vantagePlatformSetWhiteLevel(vantage_, (int)sdrWhiteLevel());
     vantageRender(vantage_);
 
     RECT clientRect;
@@ -1255,8 +1263,6 @@ static void render()
 
 static void checkHDR()
 {
-    int hdrWasActive = vantage_->platformHDRActive_;
-
     int hdrActive = 0;
     if (defaultAdapter_) {
         // Find out which monitor we're mostly overlapping
