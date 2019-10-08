@@ -76,12 +76,6 @@
     [[NSNotificationCenter defaultCenter] postNotificationName:@"hideOverlay" object:self];
 }
 
-// View / Toggle HDR
-- (IBAction)toggleHDR:sender
-{
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"toggleHDR" object:self];
-}
-
 // Diff / Diff Current Image Against...
 - (IBAction)diffCurrentImageAgainst:sender
 {

@@ -102,6 +102,7 @@ if(APPLE)
       -framework AppKit \
       -framework Metal \
       -framework MetalKit \
+      -framework QuartzCore \
       -framework ModelIO"
     )
 endif()

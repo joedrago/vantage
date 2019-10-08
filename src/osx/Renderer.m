@@ -12,7 +12,7 @@
 #import "colorist/colorist.h"
 
 static const NSUInteger kMaxBuffersInFlight = 3;
-static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
+static const int MACOS_SDR_WHITE_NITS = 200;
 
 @implementation Renderer {
     // Vantage
@@ -21,7 +21,6 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
 
     // Renderer state
     CGSize windowSize_;
-    bool hdrActive_; // This should be auto-detected in the future
 
     // Metal
     dispatch_semaphore_t inFlightSemaphore_;
@@ -58,11 +57,8 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     V = view_.V;
 
     vantagePlatformSetWhiteLevel(V, MACOS_SDR_WHITE_NITS);
-    vantagePlatformSetLinearMax(V, MACOS_SDR_WHITE_NITS); // set the default, this will change every frame
-
-    // TODO: get from OS, react when it changes
-    hdrActive_ = true;
-    [self toggleHDR:nil];
+    vantagePlatformSetLinearMax(V, 10000);
+    vantagePlatformSetHDRActive(V, 1);
 
     // --------------------------------------------------------------------------------------------
     // Init Metal
@@ -72,8 +68,14 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     CAMetalLayer * metalLayer = (CAMetalLayer *)view.layer;
     metalLayer.wantsExtendedDynamicRangeContent = YES;
     metalLayer.pixelFormat = MTLPixelFormatRGBA16Float;
-    // CAEDRMetadata * edrMetadata = [CAEDRMetadata HDR10MetadataWithMinLuminance:0 maxLuminance:10000.0f opticalOutputScale:100.0f];
-    // metalLayer.EDRMetadata = edrMetadata;
+    CGColorSpaceRef colorspace;
+    colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
+    metalLayer.colorspace = colorspace;
+    CGColorSpaceRelease(colorspace);
+    CAEDRMetadata * edrMetadata = [CAEDRMetadata HDR10MetadataWithMinLuminance:0
+                                                                  maxLuminance:10000.0f
+                                                            opticalOutputScale:MACOS_SDR_WHITE_NITS];
+    metalLayer.EDRMetadata = edrMetadata;
     view.colorPixelFormat = MTLPixelFormatRGBA16Float;
     view.sampleCount = 1;
 
@@ -159,7 +161,6 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     [center addObserver:self selector:@selector(toggleSRGB:) name:@"toggleSRGB" object:nil];
     [center addObserver:self selector:@selector(showOverlay:) name:@"showOverlay" object:nil];
     [center addObserver:self selector:@selector(hideOverlay:) name:@"hideOverlay" object:nil];
-    [center addObserver:self selector:@selector(toggleHDR:) name:@"toggleHDR" object:nil];
     [center addObserver:self selector:@selector(diffCurrentImageAgainst:) name:@"diffCurrentImageAgainst" object:nil];
     [center addObserver:self selector:@selector(showImage1:) name:@"showImage1" object:nil];
     [center addObserver:self selector:@selector(showImage2:) name:@"showImage2" object:nil];
@@ -231,23 +232,6 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
 - (void)hideOverlay:(NSNotification *)notification
 {
     vantageKillOverlay(V);
-}
-
-- (void)toggleHDR:(NSNotification *)notification
-{
-    hdrActive_ = !hdrActive_;
-
-    CAMetalLayer * metalLayer = (CAMetalLayer *)view_.layer;
-    CGColorSpaceRef colorspace;
-    if (hdrActive_) {
-        colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
-    } else {
-        colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    }
-    metalLayer.colorspace = colorspace;
-    CGColorSpaceRelease(colorspace);
-
-    vantagePlatformSetHDRActive(V, hdrActive_ ? 1 : 0);
 }
 
 - (void)diffCurrentImageAgainst:(NSNotification *)notification
@@ -545,17 +529,6 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
     // --------------------------------------------------------------------------------------------
     // Update Vantage
 
-#if 0
-    float maxEDR = view_.window.screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
-    // float curious = view_.window.screen.maximumExtendedDynamicRangeColorComponentValue;
-    if (maxEDR < 1.0f) {
-        maxEDR = 1.0f;
-    }
-#else
-    float maxEDR = 1.0f;
-#endif
-    vantagePlatformSetLinearMax(V, MACOS_SDR_WHITE_NITS * ((int)maxEDR));
-
     if (V->imageDirty_) {
         V->imageDirty_ = 0;
 
@@ -630,11 +603,7 @@ static const int MACOS_SDR_WHITE_NITS = 100; // This might be a huge lie
             uniforms.vertexScale.y = blit->dh;
             uniforms.vertexOffset.x = blit->dx;
             uniforms.vertexOffset.y = blit->dy;
-            if (hdrActive_) {
-                uniforms.overrange = ((float)V->platformLinearMax_) / (float)MACOS_SDR_WHITE_NITS;
-            } else {
-                uniforms.overrange = 1.0f;
-            }
+            uniforms.overrange = ((float)V->platformLinearMax_) / (float)MACOS_SDR_WHITE_NITS;
 
             [renderEncoder setRenderPipelineState:pipelineState_];
             [renderEncoder setCullMode:MTLCullModeNone];
