@@ -57,6 +57,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     V = view_.V;
 
     vantagePlatformSetLinear(V, 1);
+    vantagePlatformSetLuminance(V, 10000);
     vantagePlatformSetHDRActive(V, 1);
 
     // --------------------------------------------------------------------------------------------

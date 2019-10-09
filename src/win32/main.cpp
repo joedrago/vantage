@@ -88,8 +88,8 @@ static XMVECTORF32 backgroundColor = { { { 0.000000000f, 0.000000000f, 0.0000000
 static void setMenuVisible(bool visible);
 static bool createWindow();
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
-static unsigned int GetMonitorSDRWhiteLevel(HMONITOR monitor);
-static unsigned int sdrWhiteLevel();
+static int GetMonitorSDRWhiteLevel(HMONITOR monitor);
+static int sdrWhiteLevel();
 static void resizeSwapChain(bool initializing);
 static HRESULT createDevice();
 static void destroyDevice();
@@ -660,10 +660,9 @@ static bool GetPathInfo(HMONITOR monitor, DISPLAYCONFIG_PATH_INFO * path_info)
     return false;
 }
 
-#if 0
-static unsigned int GetMonitorSDRWhiteLevel(HMONITOR monitor)
+static int GetMonitorSDRWhiteLevel(HMONITOR monitor)
 {
-    unsigned int ret = 80;
+    int ret = 80;
     DISPLAYCONFIG_PATH_INFO path_info = {};
     if (!GetPathInfo(monitor, &path_info))
         return ret;
@@ -675,16 +674,15 @@ static unsigned int GetMonitorSDRWhiteLevel(HMONITOR monitor)
     white_level.header.id = path_info.targetInfo.id;
     if (DisplayConfigGetDeviceInfo(&white_level.header) != ERROR_SUCCESS)
         return ret;
-    ret = (unsigned int)white_level.SDRWhiteLevel * 80 / 1000;
+    ret = (int)white_level.SDRWhiteLevel * 80 / 1000;
     return ret;
 }
 
-static unsigned int sdrWhiteLevel()
+static int sdrWhiteLevel()
 {
     HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
     return GetMonitorSDRWhiteLevel(monitor);
 }
-#endif
 
 static void resizeSwapChain(bool initializing)
 {
@@ -1156,6 +1154,12 @@ static void destroyDevice()
 
 static void render()
 {
+    if (vantage_->platformHDRActive_) {
+        vantagePlatformSetLuminance(vantage_, 10000);
+    } else {
+        vantagePlatformSetLuminance(vantage_, sdrWhiteLevel());
+    }
+
     vantageRender(vantage_);
 
     RECT clientRect;

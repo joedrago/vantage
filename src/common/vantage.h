@@ -78,6 +78,7 @@ typedef struct Vantage
     int platformH_;
     int platformHDRActive_;
     int platformLinear_;
+    int platformLuminance_;
 
     // List of filenames to cycle through (arrow keys)
     char ** filenames_;
@@ -91,6 +92,7 @@ typedef struct Vantage
     int diffThreshold_;
     int srgbHighlight_;
     int srgbLuminance_;
+    int unspecLuminance_;
 
     // Colorist objects
     clContext * C;
@@ -111,6 +113,7 @@ typedef struct Vantage
     int imageInfoX_;
     int imageInfoY_;
     int imageHDR_;
+    int imageLuminance_;
     int imageDirty_;
     int imageVideoFrameNextIndex_;
     int imageVideoFrameIndex_;
@@ -129,6 +132,7 @@ typedef struct Vantage
 
     // Sliders
     Control srgbLuminanceSlider_;
+    Control unspecLuminanceSlider_;
     Control imageVideoFrameIndexSlider_;
 
     // Loading state (rendering hack)
@@ -198,6 +202,7 @@ void vantageMouseWheel(Vantage * V, int x, int y, float delta);
 void vantagePlatformSetHDRActive(Vantage * V, int hdrActive);
 void vantagePlatformSetSize(Vantage * V, int width, int height);
 void vantagePlatformSetLinear(Vantage * V, int linear); // 0=PQ, 1=Linear
+void vantagePlatformSetLuminance(Vantage * V, int luminance);
 
 // Rendering
 void vantagePrepareImage(Vantage * V);
