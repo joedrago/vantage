@@ -33,8 +33,8 @@ static const float MAX_SCALE = 32.0f;
 // How many frames to render "Loading..." before actually loading
 static const int LOADING_FRAMES = 3;
 
-// How arbitrarily bright (in nits) to tonemap down HDR content to display on a non-HDR display
-static const int SDR_TONEMAPPED_LUMINANCE = 200;
+// How bright (in nits) to tonemap down HDR content to display on a non-HDR display
+static const int SDR_TONEMAPPED_LUMINANCE = 80;
 
 // SRGB luminance slider
 static const int SRGB_LUMINANCE_MIN = 1;
