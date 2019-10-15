@@ -137,12 +137,13 @@ static const int MACOS_SDR_WHITE_NITS = 200;
         textureDescriptor.width = V->imageFont_->width;
         textureDescriptor.height = V->imageFont_->height;
 
+        clImagePrepareReadPixels(V->C, V->imageFont_, CL_PIXELFORMAT_U16);
         metalFontImage_ = [device_ newTextureWithDescriptor:textureDescriptor];
         MTLRegion region = MTLRegionMake2D(0, 0, textureDescriptor.width, textureDescriptor.height);
         [metalFontImage_ replaceRegion:region
                            mipmapLevel:0
                                  slice:0
-                             withBytes:V->imageFont_->pixels
+                             withBytes:V->imageFont_->pixelsU16
                            bytesPerRow:8 * V->imageFont_->width
                          bytesPerImage:0];
     }
@@ -534,6 +535,8 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 
         metalPreparedImage_ = nil;
         if (V->preparedImage_) {
+            clImagePrepareReadPixels(V->C, V->preparedImage_, CL_PIXELFORMAT_U16);
+
             MTLTextureDescriptor * textureDescriptor = [[MTLTextureDescriptor alloc] init];
             textureDescriptor.pixelFormat = MTLPixelFormatRGBA16Unorm;
             textureDescriptor.width = V->preparedImage_->width;
@@ -544,7 +547,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
             [metalPreparedImage_ replaceRegion:region
                                    mipmapLevel:0
                                          slice:0
-                                     withBytes:V->preparedImage_->pixels
+                                     withBytes:V->preparedImage_->pixelsU16
                                    bytesPerRow:8 * V->preparedImage_->width
                                  bytesPerImage:0];
         }

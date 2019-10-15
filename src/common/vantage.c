@@ -790,7 +790,7 @@ void vantagePrepareImage(Vantage * V)
         } else {
             clImage * secondImage = V->image2_;
             if (!clProfileMatches(V->C, V->image_->profile, V->image2_->profile) || (V->image_->depth != V->image2_->depth)) {
-                secondImage = clImageConvert(V->C, V->image2_, V->C->params.jobs, V->image_->depth, V->image_->profile, CL_TONEMAP_OFF);
+                secondImage = clImageConvert(V->C, V->image2_, V->image_->depth, V->image_->profile, CL_TONEMAP_OFF);
             }
 
             float minIntensity = 0.0f;
@@ -806,7 +806,7 @@ void vantagePrepareImage(Vantage * V)
                     break;
             }
 
-            V->imageDiff_ = clImageDiffCreate(V->C, V->image_, secondImage, V->C->params.jobs, minIntensity, V->diffThreshold_);
+            V->imageDiff_ = clImageDiffCreate(V->C, V->image_, secondImage, minIntensity, V->diffThreshold_);
 
             if (V->image2_ != secondImage) {
                 clImageDestroy(V->C, secondImage);
@@ -842,8 +842,7 @@ void vantagePrepareImage(Vantage * V)
                 V->highlightInfo_ = NULL;
             }
             V->highlightInfo_ = clImageSRGBHighlightPixelInfoCreate(V->C, srcImage->width * srcImage->height);
-            V->imageHighlight_ =
-                clImageCreateSRGBHighlight(V->C, srcImage, V->srgbLuminance_, &V->highlightStats_, V->highlightInfo_, NULL);
+            V->imageHighlight_ = clImageCreateSRGBHighlight(V->C, srcImage, V->srgbLuminance_, &V->highlightStats_, V->highlightInfo_);
             srcImage = V->imageHighlight_;
         }
     }
@@ -873,7 +872,7 @@ void vantagePrepareImage(Vantage * V)
         curve.implicitScale = 1.0f;
 
         clProfile * profile = clProfileCreate(V->C, &primaries, &curve, dstLuminance, NULL);
-        V->preparedImage_ = clImageConvert(V->C, srcImage, V->C->params.jobs, 16, profile, CL_TONEMAP_AUTO);
+        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO);
         clProfileDestroy(V->C, profile);
     }
 

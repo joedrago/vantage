@@ -1041,9 +1041,10 @@ static HRESULT createDevice()
         desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         desc.CPUAccessFlags = 0;
 
+        clImagePrepareReadPixels(vantage_->C, vantage_->imageFont_, CL_PIXELFORMAT_U16);
         D3D11_SUBRESOURCE_DATA initData;
         ZeroMemory(&initData, sizeof(initData));
-        initData.pSysMem = (const void *)vantage_->imageFont_->pixels;
+        initData.pSysMem = (const void *)vantage_->imageFont_->pixelsU16;
         initData.SysMemPitch = vantage_->imageFont_->width * 4 * 2;
         initData.SysMemSlicePitch = static_cast<UINT>(vantage_->imageFont_->width * vantage_->imageFont_->height * 4 * 2);
 
@@ -1188,9 +1189,10 @@ static void render()
             desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
             desc.CPUAccessFlags = 0;
 
+            clImagePrepareReadPixels(vantage_->C, vantage_->preparedImage_, CL_PIXELFORMAT_U16);
             D3D11_SUBRESOURCE_DATA initData;
             ZeroMemory(&initData, sizeof(initData));
-            initData.pSysMem = (const void *)vantage_->preparedImage_->pixels;
+            initData.pSysMem = (const void *)vantage_->preparedImage_->pixelsU16;
             initData.SysMemPitch = vantage_->preparedImage_->width * 4 * 2;
             initData.SysMemSlicePitch = static_cast<UINT>(vantage_->preparedImage_->width * vantage_->preparedImage_->height * 4 * 2);
 
