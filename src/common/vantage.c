@@ -829,25 +829,26 @@ void vantagePrepareImage(Vantage * V)
         srcImage = V->image_;
     }
 
-    if (V->diffMode_ != DIFFMODE_SHOWDIFF) {
-        clProfileQuery(V->C, srcImage->profile, NULL, NULL, &V->imageLuminance_);
-
-        if (V->srgbHighlight_) {
-            if (V->imageHighlight_) {
-                clImageDestroy(V->C, V->imageHighlight_);
-                V->imageHighlight_ = NULL;
-            }
-            if (V->highlightInfo_) {
-                clImageSRGBHighlightPixelInfoDestroy(V->C, V->highlightInfo_);
-                V->highlightInfo_ = NULL;
-            }
-            V->highlightInfo_ = clImageSRGBHighlightPixelInfoCreate(V->C, srcImage->width * srcImage->height);
-            V->imageHighlight_ = clImageCreateSRGBHighlight(V->C, srcImage, V->srgbLuminance_, &V->highlightStats_, V->highlightInfo_);
-            srcImage = V->imageHighlight_;
-        }
-    }
-
     if (srcImage) {
+        if (V->diffMode_ != DIFFMODE_SHOWDIFF) {
+            clProfileQuery(V->C, srcImage->profile, NULL, NULL, &V->imageLuminance_);
+
+            if (V->srgbHighlight_) {
+                if (V->imageHighlight_) {
+                    clImageDestroy(V->C, V->imageHighlight_);
+                    V->imageHighlight_ = NULL;
+                }
+                if (V->highlightInfo_) {
+                    clImageSRGBHighlightPixelInfoDestroy(V->C, V->highlightInfo_);
+                    V->highlightInfo_ = NULL;
+                }
+                V->highlightInfo_ = clImageSRGBHighlightPixelInfoCreate(V->C, srcImage->width * srcImage->height);
+                V->imageHighlight_ =
+                    clImageCreateSRGBHighlight(V->C, srcImage, V->srgbLuminance_, &V->highlightStats_, V->highlightInfo_);
+                srcImage = V->imageHighlight_;
+            }
+        }
+
         clProfilePrimaries primaries;
         clProfileCurve curve;
 
@@ -1115,29 +1116,43 @@ static void vantageRenderInfo(Vantage * V, float left, float top, float fontHeig
     if ((V->imageInfoX_ != -1) && (V->imageInfoY_ != -1)) {
         clImagePixelInfo * pixelInfo = &V->pixelInfo_;
 
+        int depthU16 = CL_CLAMP(V->image_->depth, 8, 16);
+        char * space = (depthU16 < 10) ? " " : "";
+
         vantageRenderNextLine(V, "");
         vantageRenderNextLine(V, "[%d, %d]", V->imageInfoX_, V->imageInfoY_);
         vantageRenderNextLine(V, "");
         vantageRenderNextLine(V, "Image Info:");
-        vantageRenderNextLine(V, "  R Raw        : %d", pixelInfo->rawR);
-        vantageRenderNextLine(V, "  G Raw        : %d", pixelInfo->rawG);
-        vantageRenderNextLine(V, "  B Raw        : %d", pixelInfo->rawB);
-        vantageRenderNextLine(V, "  A Raw        : %d", pixelInfo->rawA);
-        vantageRenderNextLine(V, "  x            : %3.3f", pixelInfo->x);
-        vantageRenderNextLine(V, "  y            : %3.3f", pixelInfo->y);
-        vantageRenderNextLine(V, "  Y            : %3.3f", pixelInfo->Y);
+        vantageRenderNextLine(V, "  R UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawR);
+        vantageRenderNextLine(V, "  G UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawG);
+        vantageRenderNextLine(V, "  B UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawB);
+        vantageRenderNextLine(V, "  A UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawA);
+        vantageRenderNextLine(V, "  R FP32       : %2.2f", pixelInfo->normR);
+        vantageRenderNextLine(V, "  G FP32       : %2.2f", pixelInfo->normG);
+        vantageRenderNextLine(V, "  B FP32       : %2.2f", pixelInfo->normB);
+        vantageRenderNextLine(V, "  A FP32       : %2.2f", pixelInfo->normA);
+        vantageRenderNextLine(V, "  x            : %4.4f", pixelInfo->x);
+        vantageRenderNextLine(V, "  y            : %4.4f", pixelInfo->y);
+        vantageRenderNextLine(V, "  Y            : %4.4f", pixelInfo->Y);
         if (V->image2_) {
             pixelInfo = &V->pixelInfo2_;
 
+            depthU16 = CL_CLAMP(V->image2_->depth, 8, 16);
+            space = (depthU16 < 10) ? " " : "";
+
             vantageRenderNextLine(V, "");
             vantageRenderNextLine(V, "Image Info (2):");
-            vantageRenderNextLine(V, "  R Raw        : %d", pixelInfo->rawR);
-            vantageRenderNextLine(V, "  G Raw        : %d", pixelInfo->rawG);
-            vantageRenderNextLine(V, "  B Raw        : %d", pixelInfo->rawB);
-            vantageRenderNextLine(V, "  A Raw        : %d", pixelInfo->rawA);
-            vantageRenderNextLine(V, "  x            : %3.3f", pixelInfo->x);
-            vantageRenderNextLine(V, "  y            : %3.3f", pixelInfo->y);
-            vantageRenderNextLine(V, "  Y            : %3.3f", pixelInfo->Y);
+            vantageRenderNextLine(V, "  R UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawR);
+            vantageRenderNextLine(V, "  G UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawG);
+            vantageRenderNextLine(V, "  B UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawB);
+            vantageRenderNextLine(V, "  A UNorm(%d)%s  : %d", depthU16, space, pixelInfo->rawA);
+            vantageRenderNextLine(V, "  R FP32       : %2.2f", pixelInfo->normR);
+            vantageRenderNextLine(V, "  G FP32       : %2.2f", pixelInfo->normG);
+            vantageRenderNextLine(V, "  B FP32       : %2.2f", pixelInfo->normB);
+            vantageRenderNextLine(V, "  A FP32       : %2.2f", pixelInfo->normA);
+            vantageRenderNextLine(V, "  x            : %4.4f", pixelInfo->x);
+            vantageRenderNextLine(V, "  y            : %4.4f", pixelInfo->y);
+            vantageRenderNextLine(V, "  Y            : %4.4f", pixelInfo->Y);
         }
     }
 
