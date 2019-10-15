@@ -872,17 +872,8 @@ void vantagePrepareImage(Vantage * V)
         }
         curve.implicitScale = 1.0f;
 
-        // Due to overranging, we can't trust the ratio of srcLum:dstLum in the clTransform alone
-        // to automatically determine tonemapping. Look for the actual potential peak luminance
-        // and use that measured peak as the hint to engage tonemapping.
-        clTonemap tonemap = CL_TONEMAP_OFF;
-        int measuredPeakLuminance = (int)clImagePeakLuminance(V->C, srcImage);
-        if (measuredPeakLuminance > dstLuminance) {
-            tonemap = CL_TONEMAP_ON;
-        }
-
         clProfile * profile = clProfileCreate(V->C, &primaries, &curve, dstLuminance, NULL);
-        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, tonemap);
+        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO);
         clProfileDestroy(V->C, profile);
     }
 

@@ -365,7 +365,7 @@
             <objects>
                 <viewController id="XfG-lQ-9wD" customClass="GameViewController" sceneMemberID="viewController">
                     <view key="view" id="m2S-Jp-Qdl" customClass="VantageView">
-                        <rect key="frame" x="0.0" y="0.0" width="1280" height="720"/>
+                        <rect key="frame" x="0.0" y="0.0" width="1600" height="900"/>
                         <autoresizingMask key="autoresizingMask"/>
                     </view>
                 </viewController>
