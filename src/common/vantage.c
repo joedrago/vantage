@@ -128,6 +128,16 @@ Vantage * vantageCreate(void)
     V->imageVideoFrameIndex_ = 0;
     V->imageVideoFrameCount_ = 0;
 
+    // Setup tonemapping for SDR mode (default values here are completely subjective)
+    clTonemapParamsSetDefaults(V->C, &V->preparedTonemap);
+    V->preparedTonemap.power = 0.8f;
+    V->preparedTonemap.contrast = 1.1f;
+    controlInitSlider(&V->preparedTonemapContrastSlider_, (int *)&V->preparedTonemap.contrast, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapClipPointSlider_, (int *)&V->preparedTonemap.clippingPoint, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapSpeedSlider_, (int *)&V->preparedTonemap.speed, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapPowerSlider_, (int *)&V->preparedTonemap.power, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    V->tonemapSlidersEnabled_ = 0;
+
     clRaw rawFont;
     rawFont.ptr = monoBinaryData;
     rawFont.size = monoBinarySize;
@@ -515,6 +525,12 @@ void vantageSetVideoFrameIndexPercentOffset(Vantage * V, int percentOffset)
     vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ + (sign * offset));
 }
 
+void vantageToggleTonemapSliders(Vantage * V)
+{
+    V->tonemapSlidersEnabled_ = !V->tonemapSlidersEnabled_;
+    vantagePrepareImage(V);
+}
+
 // --------------------------------------------------------------------------------------
 // Positioning
 
@@ -579,12 +595,26 @@ static void vantageControlClick(Vantage * V, Control * control, int x, int y)
         offset = (float)pos / (float)control->w;
     }
 
+    int controlValue;
+    if (control->flags & CONTROLFLAG_FLOAT) {
+        controlValue = (int)(*((float *)control->value) * 1000.0f);
+    } else {
+        controlValue = *control->value;
+    }
+
     float range = (float)(control->max - control->min);
     if (range > 0) {
-        *control->value = control->step * (int)floorf(0.5f + ((control->min + (int)(offset * range)) / control->step));
-        *control->value = CL_CLAMP(*control->value, control->min, control->max);
+        controlValue = control->step * (int)floorf(0.5f + ((control->min + (int)(offset * range)) / control->step));
+        controlValue = CL_CLAMP(controlValue, control->min, control->max);
     } else {
-        *control->value = control->min;
+        controlValue = control->min;
+    }
+
+    if (control->flags & CONTROLFLAG_FLOAT) {
+        float * floatValue = (float *)control->value;
+        *floatValue = (float)controlValue / 1000.0f;
+    } else {
+        *control->value = controlValue;
     }
 
     vantageKickOverlay(V);
@@ -790,7 +820,7 @@ void vantagePrepareImage(Vantage * V)
         } else {
             clImage * secondImage = V->image2_;
             if (!clProfileMatches(V->C, V->image_->profile, V->image2_->profile) || (V->image_->depth != V->image2_->depth)) {
-                secondImage = clImageConvert(V->C, V->image2_, V->image_->depth, V->image_->profile, CL_TONEMAP_OFF);
+                secondImage = clImageConvert(V->C, V->image2_, V->image_->depth, V->image_->profile, CL_TONEMAP_OFF, NULL);
             }
 
             float minIntensity = 0.0f;
@@ -873,7 +903,7 @@ void vantagePrepareImage(Vantage * V)
         curve.implicitScale = 1.0f;
 
         clProfile * profile = clProfileCreate(V->C, &primaries, &curve, dstLuminance, NULL);
-        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO);
+        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO, &V->preparedTonemap);
         clProfileDestroy(V->C, profile);
     }
 
@@ -1021,15 +1051,17 @@ static void vantageRenderControl(Vantage * V, Control * control, float x, float 
     const float sideHeight = h / 2.0f;
     const float barThickness = 4.0f;
 
+    int controlValue;
+    if (control->flags & CONTROLFLAG_FLOAT) {
+        controlValue = (int)(*((float *)control->value) * 1000.0f);
+    } else {
+        controlValue = *control->value;
+    }
+
     float offset = 0.0f;
     float range = (float)(control->max - control->min);
     if (range > 0.0f) {
-        offset = (*control->value - control->min) / range;
-    }
-
-    if (*control->value == control->max) {
-        int a = 5;
-        ++a;
+        offset = (controlValue - control->min) / range;
     }
 
     vantageFill(V, x, y + (h / 2) - (barThickness / 2), w, barThickness, &barColor);            // Middle
@@ -1341,6 +1373,33 @@ void vantageRender(Vantage * V)
         {
             float blTop = clientH - 25.0f;
 
+            // Draw tonemap sliders
+            if (V->tonemapSlidersEnabled_) {
+                vantageRenderControl(V, &V->preparedTonemapContrastSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
+                blTop -= nextLine;
+                dsPrintf(&V->tempTextBuffer_, "Tonemap Contrast: %3.3f", V->preparedTonemap.contrast);
+                vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
+                blTop -= nextLine;
+
+                vantageRenderControl(V, &V->preparedTonemapClipPointSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
+                blTop -= nextLine;
+                dsPrintf(&V->tempTextBuffer_, "Tonemap Clip Pnt: %3.3f", V->preparedTonemap.clippingPoint);
+                vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
+                blTop -= nextLine;
+
+                vantageRenderControl(V, &V->preparedTonemapSpeedSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
+                blTop -= nextLine;
+                dsPrintf(&V->tempTextBuffer_, "Tonemap Speed   : %3.3f", V->preparedTonemap.speed);
+                vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
+                blTop -= nextLine;
+
+                vantageRenderControl(V, &V->preparedTonemapPowerSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
+                blTop -= nextLine;
+                dsPrintf(&V->tempTextBuffer_, "Tonemap Power   : %3.3f", V->preparedTonemap.power);
+                vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
+                blTop -= nextLine;
+            }
+
             if (V->imageVideoFrameCount_ > 1) {
                 vantageRenderControl(V, &V->imageVideoFrameIndexSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
@@ -1379,6 +1438,17 @@ void vantageRender(Vantage * V)
 
         vantageRenderInfo(V, left, top, fontHeight, nextLine, &color);
     }
+}
+
+int vantageImageUsesLinearSampling(Vantage * V)
+{
+    if (V->diffMode_ == DIFFMODE_SHOWDIFF) {
+        return 0;
+    }
+    if (V->imageInfoX_ != -1) {
+        return 0;
+    }
+    return 1;
 }
 
 // This could potentially use clFormatDetect() instead, but that'd cause a lot of header reads.

@@ -77,7 +77,8 @@ static ID3D11InputLayout * vertexLayout_;
 static ID3D11Buffer * constantBuffer_;
 static ID3D11Buffer * vertexBuffer_;
 static ID3D11Buffer * indexBuffer_;
-static ID3D11SamplerState * sampler_;
+static ID3D11SamplerState * samplerPoint_;
+static ID3D11SamplerState * samplerLinear_;
 static ID3D11BlendState * blend_;
 static ID3D11ShaderResourceView * image_;
 static ID3D11ShaderResourceView * font_;
@@ -190,7 +191,7 @@ static void toggleFullscreen()
 }
 
 static const char * imageFileFilter =
-    "All Image Files (*.avif, *.bmp, *.jpg, *.jpeg, *.jp2, *.j2k, *.png, *.tif, *.tiff, *.webp)\0*.avif;*.bmp;*.jpg;*.jpeg;*.jp2;*.j2k;*.png;*.tif;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
+    "All Image Files (*.avif, *.avifs, *.bmp, *.jpg, *.jpeg, *.jp2, *.j2k, *.png, *.tif, *.tiff, *.webp)\0*.avif;*.avifs;*.bmp;*.jpg;*.jpeg;*.jp2;*.j2k;*.png;*.tif;*.tiff;*.webp\0All Files (*.*)\0*.*\0";
 
 static void fileOpen()
 {
@@ -347,6 +348,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     break;
                 case 115: // S
                     vantageToggleSrgbHighlight(vantage_);
+                    break;
+                case 116: // T
+                    vantageToggleTonemapSliders(vantage_);
                     break;
 
                 case 122: // Z
@@ -966,7 +970,20 @@ static HRESULT createDevice()
     sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    hr = device_->CreateSamplerState(&sampDesc, &sampler_);
+    hr = device_->CreateSamplerState(&sampDesc, &samplerPoint_);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    ZeroMemory(&sampDesc, sizeof(sampDesc));
+    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sampDesc.MinLOD = 0;
+    sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+    hr = device_->CreateSamplerState(&sampDesc, &samplerLinear_);
     if (FAILED(hr)) {
         return hr;
     }
@@ -1090,10 +1107,16 @@ static void destroyDevice()
         fill_ = nullptr;
     }
 
-    if (sampler_) {
-        sampler_->Release();
-        sampler_ = nullptr;
+    if (samplerPoint_) {
+        samplerPoint_->Release();
+        samplerPoint_ = nullptr;
     }
+
+    if (samplerLinear_) {
+        samplerLinear_->Release();
+        samplerLinear_ = nullptr;
+    }
+
     if (blend_) {
         blend_->Release();
         blend_ = nullptr;
@@ -1260,7 +1283,11 @@ static void render()
                 context_->PSSetShaderResources(0, 1, &fill_);
                 break;
         }
-        context_->PSSetSamplers(0, 1, &sampler_);
+        if (vantageImageUsesLinearSampling(vantage_) || (blit->mode != BM_IMAGE)) {
+            context_->PSSetSamplers(0, 1, &samplerLinear_);
+        } else {
+            context_->PSSetSamplers(0, 1, &samplerPoint_);
+        }
         context_->OMSetBlendState(blend_, NULL, 0xffffffff);
         context_->DrawIndexed(6, 0, 0);
     }

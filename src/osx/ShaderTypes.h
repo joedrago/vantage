@@ -31,6 +31,7 @@ typedef struct
     vector_float2 uvScale;
     vector_float2 uvOffset;
     float overrange;
+    int linear;
 } Uniforms;
 
 #endif

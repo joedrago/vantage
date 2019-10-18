@@ -60,6 +60,7 @@ typedef enum ControlFlags
 {
     CONTROLFLAG_PREPARE = (1 << 0),
     CONTROLFLAG_RELOAD = (1 << 1),
+    CONTROLFLAG_FLOAT = (1 << 2), // value is actually a float, slider is in thousandths
 } ControlFlags;
 
 typedef struct Control
@@ -124,6 +125,14 @@ typedef struct Vantage
     float imagePosH_; // height
     float imagePosS_; // scale
 
+    // Prepared image tonemapping
+    clTonemapParams preparedTonemap;
+    Control preparedTonemapContrastSlider_;
+    Control preparedTonemapClipPointSlider_;
+    Control preparedTonemapSpeedSlider_;
+    Control preparedTonemapPowerSlider_;
+    int tonemapSlidersEnabled_;
+
     // Mouse tracking
     int dragging_;
     int dragLastX_;
@@ -184,6 +193,7 @@ void vantageSetDiffMode(Vantage * V, DiffMode diffMode);
 void vantageToggleSrgbHighlight(Vantage * V);
 void vantageSetVideoFrameIndex(Vantage * V, int videoFrameIndex);
 void vantageSetVideoFrameIndexPercentOffset(Vantage * V, int percentOffset);
+void vantageToggleTonemapSliders(Vantage * V);
 
 // Positioning
 void vantageCalcCenteredImagePos(Vantage * V, float * posX, float * posY);
@@ -207,6 +217,7 @@ void vantagePlatformSetLuminance(Vantage * V, int luminance);
 // Rendering
 void vantagePrepareImage(Vantage * V);
 void vantageRender(Vantage * V);
+int vantageImageUsesLinearSampling(Vantage * V); // Returns nonzero if images should render with linear sampling
 
 // Helpers
 int vantageIsImageFile(const char * filename);

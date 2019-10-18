@@ -607,6 +607,11 @@ static const int MACOS_SDR_WHITE_NITS = 200;
             uniforms.vertexOffset.x = blit->dx;
             uniforms.vertexOffset.y = blit->dy;
             uniforms.overrange = 10000.0f / (float)MACOS_SDR_WHITE_NITS;
+            if (vantageImageUsesLinearSampling(V) || (blit->mode != BM_IMAGE)) {
+                uniforms.linear = 1;
+            } else {
+                uniforms.linear = 0;
+            }
 
             [renderEncoder setRenderPipelineState:pipelineState_];
             [renderEncoder setCullMode:MTLCullModeNone];

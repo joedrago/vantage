@@ -38,10 +38,17 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<half> colorTexture [[texture(VantageTextureIndexMain)]],
                                constant Uniforms * uniforms [[buffer(VantageVertexInputIndexUniforms)]])
 {
-    constexpr sampler textureSampler(mag_filter::nearest, min_filter::nearest);
+    constexpr sampler pointSampler(mag_filter::nearest, min_filter::nearest);
+    constexpr sampler linearSampler(mag_filter::linear, min_filter::linear);
+
 
     float2 uv = in.uv * uniforms->uvScale + uniforms->uvOffset;
-    float4 colorSample = float4(colorTexture.sample(textureSampler, uv)) * uniforms->color;
+    float4 colorSample;
+    if(uniforms->linear == 1) {
+        colorSample = float4(colorTexture.sample(linearSampler, uv)) * uniforms->color;
+    } else {
+        colorSample = float4(colorTexture.sample(pointSampler, uv)) * uniforms->color;
+    }
     colorSample.rgb *= uniforms->overrange;
     return float4(colorSample);
 }
