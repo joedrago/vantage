@@ -78,8 +78,9 @@ typedef struct Vantage
     int platformW_;
     int platformH_;
     int platformHDRActive_;
+    int platformHDRAvailable_;
     int platformLinear_;
-    int platformLuminance_;
+    float platformMaxEDR_;
 
     // List of filenames to cycle through (arrow keys)
     char ** filenames_;
@@ -126,11 +127,13 @@ typedef struct Vantage
     float imagePosS_; // scale
 
     // Prepared image tonemapping
-    clTonemapParams preparedTonemap;
+    clTonemapParams preparedTonemap_;
+    int preparedTonemapLuminance_;
     Control preparedTonemapContrastSlider_;
     Control preparedTonemapClipPointSlider_;
     Control preparedTonemapSpeedSlider_;
     Control preparedTonemapPowerSlider_;
+    Control preparedTonemapLuminanceSlider_;
     int tonemapSlidersEnabled_;
 
     // Mouse tracking
@@ -165,6 +168,8 @@ typedef struct Vantage
     float nextLineFontSize_;
     float nextLineHeight_;
     Color nextLineColor_;
+    int wantsHDR_;
+    int wantedHDR_;
 
     // Glyph information
     dynMap * glyphs_;
@@ -210,9 +215,10 @@ void vantageMouseWheel(Vantage * V, int x, int y, float delta);
 
 // Platform hooks
 void vantagePlatformSetHDRActive(Vantage * V, int hdrActive);
+void vantagePlatformSetHDRAvailable(Vantage * V, int hdrAvailable);
 void vantagePlatformSetSize(Vantage * V, int width, int height);
 void vantagePlatformSetLinear(Vantage * V, int linear); // 0=PQ, 1=Linear
-void vantagePlatformSetLuminance(Vantage * V, int luminance);
+void vantagePlatformSetMaxEDR(Vantage * V, float maxEDR);
 
 // Rendering
 void vantagePrepareImage(Vantage * V);

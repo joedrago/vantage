@@ -163,6 +163,12 @@
                                                 <action selector="toggleSRGB:" target="Ady-hI-5gd" id="Sji-NG-1oP"/>
                                             </connections>
                                         </menuItem>
+                                        <menuItem title="Toggle Tonemap Sliders" keyEquivalent="t" id="aBM-EM-Tjc">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="toggleTonemapSliders:" target="Ady-hI-5gd" id="cpy-IV-yZR"/>
+                                            </connections>
+                                        </menuItem>
                                         <menuItem isSeparatorItem="YES" id="Lte-ah-oRP"/>
                                         <menuItem title="Show Overlay" keyEquivalent=" " id="Yzj-FU-kWU">
                                             <modifierMask key="keyEquivalentModifierMask"/>

@@ -64,6 +64,12 @@
     [[NSNotificationCenter defaultCenter] postNotificationName:@"toggleSRGB" object:self];
 }
 
+// View / Toggle TonemapSliders
+- (IBAction)toggleTonemapSliders:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"toggleTonemapSliders" object:self];
+}
+
 // View / Show Overlay
 - (IBAction)showOverlay:sender
 {

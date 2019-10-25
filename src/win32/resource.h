@@ -51,6 +51,7 @@
 #define ID_VIEW_SEQUENCEPREVIOUSFRAME   32808
 #define ID_VIEW_SEQUENCENEXTFRAME       32809
 #define ID_VIEW_SEQUENCEGOTOFRAME       32810
+#define ID_VIEW_TOGGLETONEMAPSLIDERS    32811
 #define IDC_STATIC                      -1
 #define IDC_INFORMATIVE                 -1
 
@@ -60,7 +61,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        130
-#define _APS_NEXT_COMMAND_VALUE         32811
+#define _APS_NEXT_COMMAND_VALUE         32812
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

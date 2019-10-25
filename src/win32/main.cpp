@@ -31,7 +31,7 @@ using namespace DirectX;
 #define VANTAGE_STYLE_FULLSCREEN (WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE)
 
 // Main Vantage instance
-static Vantage * vantage_;
+static Vantage * V;
 
 // Win32 API
 struct WindowPosition
@@ -89,8 +89,6 @@ static XMVECTORF32 backgroundColor = { { { 0.000000000f, 0.000000000f, 0.0000000
 static void setMenuVisible(bool visible);
 static bool createWindow();
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
-static int GetMonitorSDRWhiteLevel(HMONITOR monitor);
-static int sdrWhiteLevel();
 static void resizeSwapChain(bool initializing);
 static HRESULT createDevice();
 static void destroyDevice();
@@ -218,7 +216,7 @@ static void fileOpen()
 
 static void diffOpen()
 {
-    if (daSize(&vantage_->filenames_) < 1) {
+    if (daSize(&V->filenames_) < 1) {
         return;
     }
 
@@ -240,8 +238,8 @@ static void diffOpen()
 
     if (GetOpenFileName(&ofn)) {
         char * currentFilename = NULL;
-        dsCopy(&currentFilename, vantage_->filenames_[vantage_->imageFileIndex_]);
-        vantageLoadDiff(vantage_, currentFilename, filename);
+        dsCopy(&currentFilename, V->filenames_[V->imageFileIndex_]);
+        vantageLoadDiff(V, currentFilename, filename);
         dsDestroy(&currentFilename);
     }
 }
@@ -275,17 +273,17 @@ static LRESULT CALLBACK GotoFrameProc(HWND hwnd, UINT message, WPARAM wParam, LP
 
 static void gotoFrame()
 {
-    int lastFrameIndex = vantage_->imageVideoFrameCount_ - 1;
+    int lastFrameIndex = V->imageVideoFrameCount_ - 1;
     if (lastFrameIndex < 0) {
         lastFrameIndex = 0;
     }
     dsPrintf(&gotoFrameInformative_, "(0-based, Last Frame Index: %d)", lastFrameIndex);
-    dsPrintf(&gotoFrameInput_, "%d", vantage_->imageVideoFrameIndex_);
+    dsPrintf(&gotoFrameInput_, "%d", V->imageVideoFrameIndex_);
 
     INT_PTR result = DialogBox(hInstance_, MAKEINTRESOURCE(IDD_GOTOFRAME), hwnd_, GotoFrameProc);
     if (result == IDOK) {
         int typedFrameIndex = atoi(gotoFrameInput_);
-        vantageSetVideoFrameIndex(vantage_, typedFrameIndex);
+        vantageSetVideoFrameIndex(V, typedFrameIndex);
     }
     SetActiveWindow(hwnd_);
 }
@@ -302,31 +300,31 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             unsigned int key = (unsigned int)wParam;
             switch (key) {
                 case 49: // 1
-                    vantageSetDiffMode(vantage_, DIFFMODE_SHOW1);
+                    vantageSetDiffMode(V, DIFFMODE_SHOW1);
                     break;
                 case 50: // 2
-                    vantageSetDiffMode(vantage_, DIFFMODE_SHOW2);
+                    vantageSetDiffMode(V, DIFFMODE_SHOW2);
                     break;
                 case 51: // 3
-                    vantageSetDiffMode(vantage_, DIFFMODE_SHOWDIFF);
+                    vantageSetDiffMode(V, DIFFMODE_SHOWDIFF);
                     break;
                 case 91: // [
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, -20);
+                    vantageSetVideoFrameIndexPercentOffset(V, -20);
                     break;
                 case 93: // ]
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, 20);
+                    vantageSetVideoFrameIndexPercentOffset(V, 20);
                     break;
                 case 59: // ;
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, -5);
+                    vantageSetVideoFrameIndexPercentOffset(V, -5);
                     break;
                 case 39: // '
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, 5);
+                    vantageSetVideoFrameIndexPercentOffset(V, 5);
                     break;
                 case 44: // , (<)
-                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ - 1);
+                    vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ - 1);
                     break;
                 case 46: // . (>)
-                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ + 1);
+                    vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ + 1);
                     break;
                 case 100: // D
                     diffOpen();
@@ -344,27 +342,27 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     PostQuitMessage(0);
                     break;
                 case 114: // R
-                    vantageResetImagePos(vantage_);
+                    vantageResetImagePos(V);
                     break;
                 case 115: // S
-                    vantageToggleSrgbHighlight(vantage_);
+                    vantageToggleSrgbHighlight(V);
                     break;
                 case 116: // T
-                    vantageToggleTonemapSliders(vantage_);
+                    vantageToggleTonemapSliders(V);
                     break;
 
                 case 122: // Z
-                    vantageSetDiffIntensity(vantage_, DIFFINTENSITY_ORIGINAL);
+                    vantageSetDiffIntensity(V, DIFFINTENSITY_ORIGINAL);
                     break;
                 case 120: // X
-                    vantageSetDiffIntensity(vantage_, DIFFINTENSITY_BRIGHT);
+                    vantageSetDiffIntensity(V, DIFFINTENSITY_BRIGHT);
                     break;
                 case 99: // C
-                    vantageSetDiffIntensity(vantage_, DIFFINTENSITY_DIFFONLY);
+                    vantageSetDiffIntensity(V, DIFFINTENSITY_DIFFONLY);
                     break;
 
                 case 32: // Space
-                    vantageKickOverlay(vantage_);
+                    vantageKickOverlay(V);
                     break;
             }
             break;
@@ -373,44 +371,44 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         case WM_KEYDOWN: {
             switch (wParam) {
                 case VK_ESCAPE:
-                    vantageKillOverlay(vantage_);
+                    vantageKillOverlay(V);
                     break;
                 case VK_LEFT:
-                    vantageLoad(vantage_, -1);
+                    vantageLoad(V, -1);
                     break;
                 case VK_RIGHT:
-                    vantageLoad(vantage_, 1);
+                    vantageLoad(V, 1);
                     break;
                 case VK_F11:
                     toggleFullscreen();
                     break;
 
                 case VK_UP:
-                    vantageAdjustThreshold(vantage_, 1);
+                    vantageAdjustThreshold(V, 1);
                     break;
                 case VK_DOWN:
-                    vantageAdjustThreshold(vantage_, -1);
+                    vantageAdjustThreshold(V, -1);
                     break;
                 case VK_DELETE:
-                    vantageAdjustThreshold(vantage_, -5);
+                    vantageAdjustThreshold(V, -5);
                     break;
                 case VK_END:
-                    vantageAdjustThreshold(vantage_, -50);
+                    vantageAdjustThreshold(V, -50);
                     break;
                 case VK_NEXT:
-                    vantageAdjustThreshold(vantage_, -500);
+                    vantageAdjustThreshold(V, -500);
                     break;
                 case VK_INSERT:
-                    vantageAdjustThreshold(vantage_, 5);
+                    vantageAdjustThreshold(V, 5);
                     break;
                 case VK_HOME:
-                    vantageAdjustThreshold(vantage_, 50);
+                    vantageAdjustThreshold(V, 50);
                     break;
                 case VK_PRIOR:
-                    vantageAdjustThreshold(vantage_, 500);
+                    vantageAdjustThreshold(V, 500);
                     break;
                 case VK_F5:
-                    vantageRefresh(vantage_);
+                    vantageRefresh(V);
                     break;
             }
             break;
@@ -422,48 +420,51 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     PostQuitMessage(0);
                     break;
                 case ID_VIEW_REFRESH:
-                    vantageRefresh(vantage_);
+                    vantageRefresh(V);
                     break;
                 case ID_VIEW_FULLSCREEN:
                     toggleFullscreen();
                     break;
                 case ID_VIEW_RESETIMAGEPOSITION:
-                    vantageResetImagePos(vantage_);
+                    vantageResetImagePos(V);
                     break;
                 case ID_FILE_OPEN:
                     fileOpen();
                     break;
 
                 case ID_VIEW_PREVIOUSIMAGE:
-                    vantageLoad(vantage_, -1);
+                    vantageLoad(V, -1);
                     break;
                 case ID_VIEW_NEXTIMAGE:
-                    vantageLoad(vantage_, 1);
+                    vantageLoad(V, 1);
                     break;
 
                 case ID_VIEW_SEQUENCEREWIND20:
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, -20);
+                    vantageSetVideoFrameIndexPercentOffset(V, -20);
                     break;
                 case ID_VIEW_SEQUENCEADVANCE20:
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, 20);
+                    vantageSetVideoFrameIndexPercentOffset(V, 20);
                     break;
                 case ID_VIEW_SEQUENCEREWIND5:
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, -5);
+                    vantageSetVideoFrameIndexPercentOffset(V, -5);
                     break;
                 case ID_VIEW_SEQUENCEADVANCE5:
-                    vantageSetVideoFrameIndexPercentOffset(vantage_, 5);
+                    vantageSetVideoFrameIndexPercentOffset(V, 5);
                     break;
                 case ID_VIEW_SEQUENCEPREVIOUSFRAME:
-                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ - 1);
+                    vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ - 1);
                     break;
                 case ID_VIEW_SEQUENCENEXTFRAME:
-                    vantageSetVideoFrameIndex(vantage_, vantage_->imageVideoFrameIndex_ + 1);
+                    vantageSetVideoFrameIndex(V, V->imageVideoFrameIndex_ + 1);
                     break;
                 case ID_VIEW_SEQUENCEGOTOFRAME:
                     gotoFrame();
                     break;
                 case ID_VIEW_TOGGLESRGBHIGHLIGHT:
-                    vantageToggleSrgbHighlight(vantage_);
+                    vantageToggleSrgbHighlight(V);
+                    break;
+                case ID_VIEW_TOGGLETONEMAPSLIDERS:
+                    vantageToggleTonemapSliders(V);
                     break;
 
                 case ID_DIFF_DIFFCURRENTIMAGEAGAINST:
@@ -471,49 +472,49 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     break;
 
                 case ID_DIFF_SHOWIMAGE1:
-                    vantageSetDiffMode(vantage_, DIFFMODE_SHOW1);
+                    vantageSetDiffMode(V, DIFFMODE_SHOW1);
                     break;
                 case ID_DIFF_SHOWIMAGE2:
-                    vantageSetDiffMode(vantage_, DIFFMODE_SHOW2);
+                    vantageSetDiffMode(V, DIFFMODE_SHOW2);
                     break;
                 case ID_DIFF_SHOWDIFF:
-                    vantageSetDiffMode(vantage_, DIFFMODE_SHOWDIFF);
+                    vantageSetDiffMode(V, DIFFMODE_SHOWDIFF);
                     break;
 
                 case ID_DIFF_DIFFINTENSITY_ORIGINAL:
-                    vantageSetDiffIntensity(vantage_, DIFFINTENSITY_ORIGINAL);
+                    vantageSetDiffIntensity(V, DIFFINTENSITY_ORIGINAL);
                     break;
                 case ID_DIFF_DIFFINTENSITY_BRIGHT:
-                    vantageSetDiffIntensity(vantage_, DIFFINTENSITY_BRIGHT);
+                    vantageSetDiffIntensity(V, DIFFINTENSITY_BRIGHT);
                     break;
                 case ID_DIFF_DIFFINTENSITY_DIFFONLY:
-                    vantageSetDiffIntensity(vantage_, DIFFINTENSITY_DIFFONLY);
+                    vantageSetDiffIntensity(V, DIFFINTENSITY_DIFFONLY);
                     break;
 
                 case ID_DIFF_ADJUSTTHRESHOLDM1:
-                    vantageAdjustThreshold(vantage_, -1);
+                    vantageAdjustThreshold(V, -1);
                     break;
                 case ID_DIFF_ADJUSTTHRESHOLDM5:
-                    vantageAdjustThreshold(vantage_, -5);
+                    vantageAdjustThreshold(V, -5);
                     break;
                 case ID_DIFF_ADJUSTTHRESHOLDM50:
-                    vantageAdjustThreshold(vantage_, -50);
+                    vantageAdjustThreshold(V, -50);
                     break;
                 case ID_DIFF_ADJUSTTHRESHOLDM500:
-                    vantageAdjustThreshold(vantage_, -500);
+                    vantageAdjustThreshold(V, -500);
                     break;
 
                 case ID_DIFF_ADJUSTTHRESHOLD1:
-                    vantageAdjustThreshold(vantage_, 1);
+                    vantageAdjustThreshold(V, 1);
                     break;
                 case ID_DIFF_ADJUSTTHRESHOLD5:
-                    vantageAdjustThreshold(vantage_, 5);
+                    vantageAdjustThreshold(V, 5);
                     break;
                 case ID_DIFF_ADJUSTTHRESHOLD50:
-                    vantageAdjustThreshold(vantage_, 50);
+                    vantageAdjustThreshold(V, 50);
                     break;
                 case ID_DIFF_ADJUSTTHRESHOLD500:
-                    vantageAdjustThreshold(vantage_, 500);
+                    vantageAdjustThreshold(V, 500);
                     break;
             }
             break;
@@ -521,7 +522,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         case WM_LBUTTONDOWN: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
-            vantageMouseLeftDown(vantage_, x, y);
+            vantageMouseLeftDown(V, x, y);
             SetCapture(hwnd_);
         } break;
 
@@ -529,35 +530,35 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         case WM_RBUTTONUP: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
-            vantageMouseSetPos(vantage_, x, y);
+            vantageMouseSetPos(V, x, y);
         } break;
 
         case WM_LBUTTONDBLCLK: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
-            vantageMouseLeftDoubleClick(vantage_, x, y);
+            vantageMouseLeftDoubleClick(V, x, y);
         } break;
 
         case WM_LBUTTONUP: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
-            vantageMouseLeftUp(vantage_, x, y);
+            vantageMouseLeftUp(V, x, y);
             ReleaseCapture();
         } break;
 
         case WM_NCLBUTTONUP: {
-            vantageMouseLeftUp(vantage_, -1, -1);
+            vantageMouseLeftUp(V, -1, -1);
             ReleaseCapture();
         } break;
 
         case WM_MOUSEMOVE: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
-            vantageMouseMove(vantage_, x, y);
+            vantageMouseMove(V, x, y);
             if (wParam & MK_RBUTTON) {
-                vantageMouseSetPos(vantage_, x, y);
+                vantageMouseSetPos(V, x, y);
             }
-            if ((wParam & MK_RBUTTON) || vantage_->dragging_) {
+            if ((wParam & MK_RBUTTON) || V->dragging_) {
                 render();
             }
         } break;
@@ -568,7 +569,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             p.y = GET_Y_LPARAM(lParam);
             ScreenToClient(hwnd, &p);
             int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-            vantageMouseWheel(vantage_, p.x, p.y, (float)delta / 240.0f);
+            vantageMouseWheel(V, p.x, p.y, (float)delta / 240.0f);
         } break;
 
         case WM_DROPFILES: {
@@ -582,7 +583,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 DragQueryFile(drop, 1, filename2, MAX_PATH);
                 DragFinish(drop);
                 if (filename1[0] && filename2[0]) {
-                    vantageLoadDiff(vantage_, filename1, filename2);
+                    vantageLoadDiff(V, filename1, filename2);
                 }
             } else {
                 DragQueryFile(drop, 0, filename1, MAX_PATH);
@@ -664,30 +665,6 @@ static bool GetPathInfo(HMONITOR monitor, DISPLAYCONFIG_PATH_INFO * path_info)
     return false;
 }
 
-static int GetMonitorSDRWhiteLevel(HMONITOR monitor)
-{
-    int ret = 80;
-    DISPLAYCONFIG_PATH_INFO path_info = {};
-    if (!GetPathInfo(monitor, &path_info))
-        return ret;
-
-    DISPLAYCONFIG_SDR_WHITE_LEVEL white_level = {};
-    white_level.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
-    white_level.header.size = sizeof(white_level);
-    white_level.header.adapterId = path_info.targetInfo.adapterId;
-    white_level.header.id = path_info.targetInfo.id;
-    if (DisplayConfigGetDeviceInfo(&white_level.header) != ERROR_SUCCESS)
-        return ret;
-    ret = (int)white_level.SDRWhiteLevel * 80 / 1000;
-    return ret;
-}
-
-static int sdrWhiteLevel()
-{
-    HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
-    return GetMonitorSDRWhiteLevel(monitor);
-}
-
 static void resizeSwapChain(bool initializing)
 {
     if (!swapChain_) {
@@ -704,16 +681,12 @@ static void resizeSwapChain(bool initializing)
     GetClientRect(hwnd_, &clientRect);
     unsigned int width = max(clientRect.right, 1);
     unsigned int height = max(clientRect.bottom, 1);
-    vantagePlatformSetSize(vantage_, (int)width, (int)height);
+    vantagePlatformSetSize(V, (int)width, (int)height);
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     swapChain_->GetDesc(&swapChainDesc);
     bool resizeSwapChain = (swapChainDesc.BufferDesc.Width != width) || (swapChainDesc.BufferDesc.Height != height);
     if (resizeSwapChain) {
-        // char debugString[128];
-        // sprintf(debugString, "ResizeBuffers: %dx%d\n", width, height);
-        // OutputDebugString(debugString);
-
         swapChain_->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     }
 
@@ -738,7 +711,6 @@ static void resizeSwapChain(bool initializing)
     context_->RSSetViewports(1, &vp);
 
     if (!initializing && resizeSwapChain) {
-        vantageResetImagePos(vantage_);
         render();
     }
 }
@@ -1047,8 +1019,8 @@ static HRESULT createDevice()
     {
         D3D11_TEXTURE2D_DESC desc;
         ZeroMemory(&desc, sizeof(desc));
-        desc.Width = static_cast<UINT>(vantage_->imageFont_->width);
-        desc.Height = static_cast<UINT>(vantage_->imageFont_->height);
+        desc.Width = static_cast<UINT>(V->imageFont_->width);
+        desc.Height = static_cast<UINT>(V->imageFont_->height);
         desc.MipLevels = static_cast<UINT>(1);
         desc.ArraySize = static_cast<UINT>(1);
         desc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
@@ -1058,12 +1030,12 @@ static HRESULT createDevice()
         desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         desc.CPUAccessFlags = 0;
 
-        clImagePrepareReadPixels(vantage_->C, vantage_->imageFont_, CL_PIXELFORMAT_U16);
+        clImagePrepareReadPixels(V->C, V->imageFont_, CL_PIXELFORMAT_U16);
         D3D11_SUBRESOURCE_DATA initData;
         ZeroMemory(&initData, sizeof(initData));
-        initData.pSysMem = (const void *)vantage_->imageFont_->pixelsU16;
-        initData.SysMemPitch = vantage_->imageFont_->width * 4 * 2;
-        initData.SysMemSlicePitch = static_cast<UINT>(vantage_->imageFont_->width * vantage_->imageFont_->height * 4 * 2);
+        initData.pSysMem = (const void *)V->imageFont_->pixelsU16;
+        initData.SysMemPitch = V->imageFont_->width * 4 * 2;
+        initData.SysMemSlicePitch = static_cast<UINT>(V->imageFont_->width * V->imageFont_->height * 4 * 2);
 
         ID3D11Texture2D * tex = NULL;
         hr = device_->CreateTexture2D(&desc, &initData, &tex);
@@ -1082,6 +1054,7 @@ static HRESULT createDevice()
         tex->Release();
     }
 
+    checkHDR();
     return S_OK;
 }
 
@@ -1178,13 +1151,11 @@ static void destroyDevice()
 
 static void render()
 {
-    if (vantage_->platformHDRActive_) {
-        vantagePlatformSetLuminance(vantage_, 10000);
-    } else {
-        vantagePlatformSetLuminance(vantage_, sdrWhiteLevel());
+    if (V->wantedHDR_ != V->wantsHDR_) {
+        checkHDR();
     }
 
-    vantageRender(vantage_);
+    vantageRender(V);
 
     RECT clientRect;
     GetClientRect(hwnd_, &clientRect);
@@ -1192,17 +1163,17 @@ static void render()
     float clientH = (float)clientRect.bottom;
     bool showHLG = false;
 
-    if (vantage_->imageDirty_) {
+    if (V->imageDirty_) {
         if (image_) {
             image_->Release();
             image_ = NULL;
         }
 
-        if (vantage_->preparedImage_) {
+        if (V->preparedImage_) {
             D3D11_TEXTURE2D_DESC desc;
             ZeroMemory(&desc, sizeof(desc));
-            desc.Width = static_cast<UINT>(vantage_->preparedImage_->width);
-            desc.Height = static_cast<UINT>(vantage_->preparedImage_->height);
+            desc.Width = static_cast<UINT>(V->preparedImage_->width);
+            desc.Height = static_cast<UINT>(V->preparedImage_->height);
             desc.MipLevels = static_cast<UINT>(1);
             desc.ArraySize = static_cast<UINT>(1);
             desc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
@@ -1212,12 +1183,12 @@ static void render()
             desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
             desc.CPUAccessFlags = 0;
 
-            clImagePrepareReadPixels(vantage_->C, vantage_->preparedImage_, CL_PIXELFORMAT_U16);
+            clImagePrepareReadPixels(V->C, V->preparedImage_, CL_PIXELFORMAT_U16);
             D3D11_SUBRESOURCE_DATA initData;
             ZeroMemory(&initData, sizeof(initData));
-            initData.pSysMem = (const void *)vantage_->preparedImage_->pixelsU16;
-            initData.SysMemPitch = vantage_->preparedImage_->width * 4 * 2;
-            initData.SysMemSlicePitch = static_cast<UINT>(vantage_->preparedImage_->width * vantage_->preparedImage_->height * 4 * 2);
+            initData.pSysMem = (const void *)V->preparedImage_->pixelsU16;
+            initData.SysMemPitch = V->preparedImage_->width * 4 * 2;
+            initData.SysMemSlicePitch = static_cast<UINT>(V->preparedImage_->width * V->preparedImage_->height * 4 * 2);
 
             ID3D11Texture2D * tex = NULL;
             HRESULT hr = device_->CreateTexture2D(&desc, &initData, &tex);
@@ -1232,7 +1203,7 @@ static void render()
                 if (FAILED(hr)) {
                     tex->Release();
                     image_ = NULL;
-                    vantageUnload(vantage_);
+                    vantageUnload(V);
                     return;
                 }
             }
@@ -1243,11 +1214,11 @@ static void render()
     context_->OMSetRenderTargets(1, &renderTarget_, nullptr);
     context_->ClearRenderTargetView(renderTarget_, backgroundColor);
 
-    int blitCount = daSize(&vantage_->blits_);
+    int blitCount = daSize(&V->blits_);
     for (int blitIndex = 0; blitIndex < blitCount; ++blitIndex) {
-        Blit * blit = &vantage_->blits_[blitIndex];
+        Blit * blit = &V->blits_[blitIndex];
         if (blit->mode == BM_IMAGE) {
-            if (!vantage_->preparedImage_ || !image_ || (clientW <= 0.0f) || (clientH <= 0.0f)) {
+            if (!V->preparedImage_ || !image_ || (clientW <= 0.0f) || (clientH <= 0.0f)) {
                 continue;
             }
         }
@@ -1283,7 +1254,7 @@ static void render()
                 context_->PSSetShaderResources(0, 1, &fill_);
                 break;
         }
-        if (vantageImageUsesLinearSampling(vantage_) || (blit->mode != BM_IMAGE)) {
+        if (vantageImageUsesLinearSampling(V) || (blit->mode != BM_IMAGE)) {
             context_->PSSetSamplers(0, 1, &samplerLinear_);
         } else {
             context_->PSSetSamplers(0, 1, &samplerPoint_);
@@ -1321,17 +1292,28 @@ static void checkHDR()
             }
         }
 
+        vantagePlatformSetHDRAvailable(V, hdrActive);
+        if (!V->wantsHDR_) {
+            hdrActive = 0;
+        }
+
         IDXGISwapChain3 * swapChain3 = nullptr;
         HRESULT hr = swapChain_->QueryInterface(IID_PPV_ARGS(&swapChain3));
         if (SUCCEEDED(hr)) {
-            DXGI_COLOR_SPACE_TYPE colorSpaceType = (vantage_->platformHDRActive_) ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
-                                                                                  : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+            DXGI_COLOR_SPACE_TYPE colorSpaceType = (hdrActive) ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+                                                               : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
             swapChain3->SetColorSpace1(colorSpaceType);
             swapChain3->Release();
+
+            // if (hdrActive) {
+            //     OutputDebugString("** HDR ACTIVE\n");
+            // } else {
+            //     OutputDebugString("** HDR INACTIVE\n");
+            // }
         }
     }
 
-    vantagePlatformSetHDRActive(vantage_, hdrActive);
+    vantagePlatformSetHDRActive(V, hdrActive);
 }
 
 static bool sortAlphabeticallyIgnoringCase(const std::string & a, const std::string & b)
@@ -1385,12 +1367,12 @@ static void loadAdjacentPaths(const char * filename)
         requestedFilenameIndex = (int)imageList.size() - 1;
     }
 
-    vantageFileListClear(vantage_);
+    vantageFileListClear(V);
     for (auto it = imageList.begin(); it != imageList.end(); ++it, ++index) {
-        vantageFileListAppend(vantage_, it->c_str());
+        vantageFileListAppend(V, it->c_str());
     }
-    vantage_->imageFileIndex_ = requestedFilenameIndex;
-    vantageLoad(vantage_, 0);
+    V->imageFileIndex_ = requestedFilenameIndex;
+    vantageLoad(V, 0);
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
@@ -1410,13 +1392,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     std::string filename1, filename2;
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 
-    vantage_ = vantageCreate();
+    V = vantageCreate();
 
     if (numArgs > 1) {
         // Diff!
         filename1 = converter.to_bytes(argv[0]);
         filename2 = converter.to_bytes(argv[1]);
-        vantageLoadDiff(vantage_, filename1.c_str(), filename2.c_str());
+        vantageLoadDiff(V, filename1.c_str(), filename2.c_str());
     } else if (numArgs > 0) {
         // Single filename
         filename1 = converter.to_bytes(argv[0]);
@@ -1441,6 +1423,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     }
 
     destroyDevice();
-    vantageDestroy(vantage_);
+    vantageDestroy(V);
     return 0;
 }

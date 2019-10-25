@@ -85,8 +85,9 @@ Vantage * vantageCreate(void)
     V->platformW_ = 1;
     V->platformH_ = 1;
     V->platformHDRActive_ = 0;
+    V->platformHDRAvailable_ = 0;
     V->platformLinear_ = 0; // PQ by default
-    V->platformLuminance_ = SRGB_LUMINANCE_DEF;
+    V->platformMaxEDR_ = 0.0f;
 
     V->C = clContextCreate(NULL);
     V->filenames_ = NULL;
@@ -129,13 +130,18 @@ Vantage * vantageCreate(void)
     V->imageVideoFrameCount_ = 0;
 
     // Setup tonemapping for SDR mode (default values here are completely subjective)
-    clTonemapParamsSetDefaults(V->C, &V->preparedTonemap);
-    V->preparedTonemap.power = 0.8f;
-    V->preparedTonemap.contrast = 1.1f;
-    controlInitSlider(&V->preparedTonemapContrastSlider_, (int *)&V->preparedTonemap.contrast, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
-    controlInitSlider(&V->preparedTonemapClipPointSlider_, (int *)&V->preparedTonemap.clippingPoint, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
-    controlInitSlider(&V->preparedTonemapSpeedSlider_, (int *)&V->preparedTonemap.speed, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
-    controlInitSlider(&V->preparedTonemapPowerSlider_, (int *)&V->preparedTonemap.power, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    clTonemapParamsSetDefaults(V->C, &V->preparedTonemap_);
+    V->preparedTonemapLuminance_ = SRGB_LUMINANCE_DEF;
+    controlInitSlider(&V->preparedTonemapContrastSlider_, (int *)&V->preparedTonemap_.contrast, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapClipPointSlider_, (int *)&V->preparedTonemap_.clippingPoint, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapSpeedSlider_, (int *)&V->preparedTonemap_.speed, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapPowerSlider_, (int *)&V->preparedTonemap_.power, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapLuminanceSlider_,
+                      &V->preparedTonemapLuminance_,
+                      SRGB_LUMINANCE_MIN,
+                      SRGB_LUMINANCE_MAX,
+                      SRGB_LUMINANCE_STEP,
+                      CONTROLFLAG_PREPARE);
     V->tonemapSlidersEnabled_ = 0;
 
     clRaw rawFont;
@@ -146,6 +152,8 @@ Vantage * vantageCreate(void)
 
     V->blits_ = NULL;
     daCreate(&V->blits_, sizeof(Blit));
+    V->wantedHDR_ = 1;
+    V->wantsHDR_ = 1;
 
     V->dragControl_ = NULL;
     V->activeControls_ = NULL;
@@ -529,6 +537,7 @@ void vantageToggleTonemapSliders(Vantage * V)
 {
     V->tonemapSlidersEnabled_ = !V->tonemapSlidersEnabled_;
     vantagePrepareImage(V);
+    vantageKickOverlay(V);
 }
 
 // --------------------------------------------------------------------------------------
@@ -769,12 +778,19 @@ void vantagePlatformSetHDRActive(Vantage * V, int hdrActive)
     }
 }
 
+void vantagePlatformSetHDRAvailable(Vantage * V, int hdrAvailable)
+{
+    V->platformHDRAvailable_ = hdrAvailable;
+}
+
 void vantagePlatformSetSize(Vantage * V, int width, int height)
 {
-    V->platformW_ = width;
-    V->platformH_ = height;
+    if ((V->platformW_ != width) || (V->platformH_ != height)) {
+        V->platformW_ = width;
+        V->platformH_ = height;
 
-    vantageResetImagePos(V);
+        vantageResetImagePos(V);
+    }
 }
 
 void vantagePlatformSetLinear(Vantage * V, int linear)
@@ -785,12 +801,9 @@ void vantagePlatformSetLinear(Vantage * V, int linear)
     }
 }
 
-void vantagePlatformSetLuminance(Vantage * V, int luminance)
+void vantagePlatformSetMaxEDR(Vantage * V, float maxEDR)
 {
-    if (V->platformLuminance_ != luminance) {
-        V->platformLuminance_ = luminance;
-        vantagePrepareImage(V);
-    }
+    V->platformMaxEDR_ = maxEDR;
 }
 
 // --------------------------------------------------------------------------------------
@@ -806,6 +819,9 @@ void vantagePrepareImage(Vantage * V)
     clImage * srcImage = NULL;
 
     V->C->defaultLuminance = V->unspecLuminance_;
+
+    clTonemapParams * preparedTonemap = &V->preparedTonemap_;
+    int preparedTonemapLuminance = V->preparedTonemapLuminance_;
 
     if (V->image_ && V->image2_) {
         if (!clProfileMatches(V->C, V->image_->profile, V->image2_->profile) || (V->image_->depth != V->image2_->depth)) {
@@ -851,6 +867,10 @@ void vantagePrepareImage(Vantage * V)
                 srcImage = V->image2_;
                 break;
             case DIFFMODE_SHOWDIFF:
+                // Don't tonemap the diff
+                preparedTonemap = NULL;
+                preparedTonemapLuminance = SRGB_LUMINANCE_DEF;
+
                 srcImage = V->imageDiff_->image;
                 break;
         }
@@ -876,6 +896,10 @@ void vantagePrepareImage(Vantage * V)
                 V->imageHighlight_ =
                     clImageCreateSRGBHighlight(V->C, srcImage, V->srgbLuminance_, &V->highlightStats_, V->highlightInfo_);
                 srcImage = V->imageHighlight_;
+
+                // Don't tonemap the SRGB highlight
+                preparedTonemap = NULL;
+                preparedTonemapLuminance = SRGB_LUMINANCE_DEF;
             }
         }
 
@@ -883,7 +907,7 @@ void vantagePrepareImage(Vantage * V)
         clProfileCurve curve;
 
         int dstLuminance = 10000;
-        if (V->platformHDRActive_) {
+        if (V->platformHDRActive_ && V->wantsHDR_) {
             clContextGetStockPrimaries(V->C, "bt2020", &primaries);
             if (V->platformLinear_) {
                 curve.type = CL_PCT_GAMMA;
@@ -896,14 +920,18 @@ void vantagePrepareImage(Vantage * V)
         } else {
             clContextGetStockPrimaries(V->C, "bt709", &primaries);
             curve.type = CL_PCT_GAMMA;
-            curve.gamma = 2.2f;
-            dstLuminance = V->platformLuminance_;
+            if (V->platformLinear_) {
+                curve.gamma = 1.0f;
+            } else {
+                curve.gamma = 2.2f;
+            }
+            dstLuminance = preparedTonemapLuminance;
             V->imageHDR_ = 0;
         }
         curve.implicitScale = 1.0f;
 
         clProfile * profile = clProfileCreate(V->C, &primaries, &curve, dstLuminance, NULL);
-        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO, &V->preparedTonemap);
+        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO, preparedTonemap);
         clProfileDestroy(V->C, profile);
     }
 
@@ -949,6 +977,19 @@ static void vantageFill(Vantage * V, float dx, float dy, float dw, float dh, con
     daPush(&V->blits_, blit);
 }
 
+static float vantageScaleTextLuminance(Vantage * V, float lum)
+{
+    if (V->platformHDRActive_) {
+        // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
+        lum = powf(lum, 2.2f);
+        lum *= (float)TEXT_LUMINANCE / 10000.0f;
+        if (!V->platformLinear_) {
+            lum = PQ_OETF(lum);
+        }
+    }
+    return lum;
+}
+
 void vantageBlitString(Vantage * V, const char * str, float x, float y, float height, Color * startingColor)
 {
     Color color = *startingColor;
@@ -982,9 +1023,9 @@ void vantageBlitString(Vantage * V, const char * str, float x, float y, float he
                 unsigned int r = 0, g = 0, b = 0;
                 int count = sscanf(hexString, "#%02x%02x%02x", &r, &g, &b);
                 if (count == 3) {
-                    color.r = r / 255.0f;
-                    color.g = g / 255.0f;
-                    color.b = b / 255.0f;
+                    color.r = vantageScaleTextLuminance(V, r / 255.0f);
+                    color.g = vantageScaleTextLuminance(V, g / 255.0f);
+                    color.b = vantageScaleTextLuminance(V, b / 255.0f);
                 }
             }
             continue;
@@ -1016,19 +1057,6 @@ void vantageBlitString(Vantage * V, const char * str, float x, float y, float he
 
         currX += scaleX * glyph->advance;
     }
-}
-
-static float vantageScaleTextLuminance(Vantage * V, float lum)
-{
-    if (V->platformHDRActive_) {
-        // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
-        lum = powf(lum, 2.2f);
-        lum *= (float)TEXT_LUMINANCE / 10000.0f;
-        if (!V->platformLinear_) {
-            lum = PQ_OETF(lum);
-        }
-    }
-    return lum;
 }
 
 static void vantageRenderControl(Vantage * V, Control * control, float x, float y, float w, float h)
@@ -1256,6 +1284,13 @@ void vantageRender(Vantage * V)
     daClear(&V->blits_, NULL);
     daClear(&V->activeControls_, NULL);
 
+    V->wantedHDR_ = V->wantsHDR_;
+    V->wantsHDR_ = !V->tonemapSlidersEnabled_;
+
+    if (V->wantedHDR_ != V->wantsHDR_) {
+        vantagePrepareImage(V);
+    }
+
     if (V->loadWaitFrames_ > 0) {
         --V->loadWaitFrames_;
         if (V->loadWaitFrames_ == 0) {
@@ -1283,10 +1318,6 @@ void vantageRender(Vantage * V)
         return;
     }
 
-    if (V->platformHDRActive_ != V->imageHDR_) {
-        vantagePrepareImage(V);
-    }
-
     vantageBlitImage(V, V->imagePosX_, V->imagePosY_, V->imagePosW_, V->imagePosH_);
 
     int showHLG = 0;
@@ -1304,7 +1335,7 @@ void vantageRender(Vantage * V)
     }
 
     double dt = now() - V->overlayStart_;
-    if ((daSize(&V->overlay_) > 0) && (dt < V->overlayDuration_)) {
+    if (dt < V->overlayDuration_) {
         float clientW = (float)V->platformW_;
         float clientH = (float)V->platformH_;
 
@@ -1313,7 +1344,7 @@ void vantageRender(Vantage * V)
         float left = (clientW - infoW);
         float top = 10.0f;
 
-        if ((V->imageInfoX_ != -1) || (V->imageInfoY_ != -1) || V->srgbHighlight_ ||
+        if ((V->imageInfoX_ != -1) || (V->imageInfoY_ != -1) || V->srgbHighlight_ || V->tonemapSlidersEnabled_ ||
             (V->imageDiff_ && (V->diffMode_ == DIFFMODE_SHOWDIFF))) {
             float blackW = infoW;
             float blackH = clientH;
@@ -1360,11 +1391,25 @@ void vantageRender(Vantage * V)
                 blTop -= nextLine;
             }
 
-            if (!V->platformHDRActive_) {
-                dsPrintf(&V->tempTextBuffer_, "HDR    : Inactive (%d nit%s)", V->platformLuminance_, (V->platformLuminance_ > 1) ? "s" : "");
+            if (V->platformHDRAvailable_) {
+                if (V->wantsHDR_) {
+                    if (V->platformMaxEDR_ > 0.0f) {
+                        dsPrintf(&V->tempTextBuffer_, "HDR    : Active (maxEDR: %g)", V->platformMaxEDR_);
+                    } else {
+                        dsPrintf(&V->tempTextBuffer_, "HDR    : Active");
+                    }
+                    vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
+                } else {
+                    // If there are reasons other than tonemapSlidersEnabled_ to forcibly disable
+                    // wantsHDR_, switch here
+                    dsPrintf(&V->tempTextBuffer_, "HDR    : Inactive (Tonemap Sliders)");
+                    vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
+                }
+            } else {
+                dsPrintf(&V->tempTextBuffer_, "HDR    : Unavailable");
                 vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
-                blTop -= nextLine;
             }
+            blTop -= nextLine;
         }
 
         left += infoMargin; // right text margin
@@ -1375,27 +1420,42 @@ void vantageRender(Vantage * V)
 
             // Draw tonemap sliders
             if (V->tonemapSlidersEnabled_) {
+                int imageLuminance = V->imageLuminance_;
+                if (imageLuminance == CL_LUMINANCE_UNSPECIFIED) {
+                    imageLuminance = V->unspecLuminance_;
+                }
+
                 vantageRenderControl(V, &V->preparedTonemapContrastSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
-                dsPrintf(&V->tempTextBuffer_, "Tonemap Contrast: %3.3f", V->preparedTonemap.contrast);
+                dsPrintf(&V->tempTextBuffer_, "Tonemap Contrast : %3.3f", V->preparedTonemap_.contrast);
                 vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
                 blTop -= nextLine;
 
                 vantageRenderControl(V, &V->preparedTonemapClipPointSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
-                dsPrintf(&V->tempTextBuffer_, "Tonemap Clip Pnt: %3.3f", V->preparedTonemap.clippingPoint);
+                dsPrintf(&V->tempTextBuffer_, "Tonemap ClipPoint: %3.3f", V->preparedTonemap_.clippingPoint);
                 vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
                 blTop -= nextLine;
 
                 vantageRenderControl(V, &V->preparedTonemapSpeedSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
-                dsPrintf(&V->tempTextBuffer_, "Tonemap Speed   : %3.3f", V->preparedTonemap.speed);
+                dsPrintf(&V->tempTextBuffer_, "Tonemap Speed    : %3.3f", V->preparedTonemap_.speed);
                 vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
                 blTop -= nextLine;
 
                 vantageRenderControl(V, &V->preparedTonemapPowerSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
-                dsPrintf(&V->tempTextBuffer_, "Tonemap Power   : %3.3f", V->preparedTonemap.power);
+                dsPrintf(&V->tempTextBuffer_, "Tonemap Power    : %3.3f", V->preparedTonemap_.power);
+                vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
+                blTop -= nextLine;
+
+                vantageRenderControl(V, &V->preparedTonemapLuminanceSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
+                blTop -= nextLine;
+                dsPrintf(&V->tempTextBuffer_,
+                         "Tonemap Luminance: %d nit%s (%s)",
+                         V->preparedTonemapLuminance_,
+                         (V->preparedTonemapLuminance_ > 1) ? "s" : "",
+                         (imageLuminance > V->preparedTonemapLuminance_) ? "On" : "Off");
                 vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
                 blTop -= nextLine;
             }
@@ -1417,7 +1477,7 @@ void vantageRender(Vantage * V)
                 vantageRenderControl(V, &V->unspecLuminanceSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
 
-                dsPrintf(&V->tempTextBuffer_, "Unspec Luminance: %d nit%s", V->unspecLuminance_, (V->unspecLuminance_ > 1) ? "s" : "");
+                dsPrintf(&V->tempTextBuffer_, "Unspec Luminance : %d nit%s", V->unspecLuminance_, (V->unspecLuminance_ > 1) ? "s" : "");
                 vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
                 blTop -= nextLine;
             }
@@ -1426,7 +1486,7 @@ void vantageRender(Vantage * V)
                 vantageRenderControl(V, &V->srgbLuminanceSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
 
-                dsPrintf(&V->tempTextBuffer_, "SRGB Threshold  : %d nit%s", V->srgbLuminance_, (V->srgbLuminance_ > 1) ? "s" : "");
+                dsPrintf(&V->tempTextBuffer_, "SRGB Threshold   : %d nit%s", V->srgbLuminance_, (V->srgbLuminance_ > 1) ? "s" : "");
                 vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
                 blTop -= nextLine;
             }
