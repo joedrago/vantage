@@ -133,7 +133,7 @@ Vantage * vantageCreate(void)
     clTonemapParamsSetDefaults(V->C, &V->preparedTonemap_);
     V->preparedTonemapLuminance_ = SRGB_LUMINANCE_DEF;
     controlInitSlider(&V->preparedTonemapContrastSlider_, (int *)&V->preparedTonemap_.contrast, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
-    controlInitSlider(&V->preparedTonemapClipPointSlider_, (int *)&V->preparedTonemap_.clippingPoint, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
+    controlInitSlider(&V->preparedTonemapClipPointSlider_, (int *)&V->preparedTonemap_.clipPoint, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
     controlInitSlider(&V->preparedTonemapSpeedSlider_, (int *)&V->preparedTonemap_.speed, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
     controlInitSlider(&V->preparedTonemapPowerSlider_, (int *)&V->preparedTonemap_.power, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
     controlInitSlider(&V->preparedTonemapLuminanceSlider_,
@@ -1433,7 +1433,7 @@ void vantageRender(Vantage * V)
 
                 vantageRenderControl(V, &V->preparedTonemapClipPointSlider_, left, blTop, infoW - (infoMargin * 2), fontHeight);
                 blTop -= nextLine;
-                dsPrintf(&V->tempTextBuffer_, "Tonemap ClipPoint: %3.3f", V->preparedTonemap_.clippingPoint);
+                dsPrintf(&V->tempTextBuffer_, "Tonemap ClipPoint: %3.3f", V->preparedTonemap_.clipPoint);
                 vantageBlitString(V, V->tempTextBuffer_, left, blTop, fontHeight, &color);
                 blTop -= nextLine;
 
