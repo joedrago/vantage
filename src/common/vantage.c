@@ -76,6 +76,11 @@ static void controlInitSlider(Control * control, int * value, int min, int max, 
 }
 
 // --------------------------------------------------------------------------------------
+// Forward declarations for statics
+
+static void vantageUpdateCIEBackground(Vantage * V, clProfile * profile);
+
+// --------------------------------------------------------------------------------------
 // Creation / destruction
 
 Vantage * vantageCreate(void)
@@ -105,6 +110,8 @@ Vantage * vantageCreate(void)
     V->image_ = NULL;
     V->image2_ = NULL;
     V->imageFont_ = NULL;
+    V->imageCIEBackground_ = NULL;
+    V->imageCIECrosshair_ = NULL;
     V->imageDiff_ = NULL;
     V->imageHighlight_ = NULL;
     V->preparedImage_ = NULL;
@@ -150,6 +157,16 @@ Vantage * vantageCreate(void)
     clFormat * format = clContextFindFormat(V->C, "png");
     V->imageFont_ = format->readFunc(V->C, "png", NULL, &rawFont);
 
+    float transparent[4] = { 0, 0, 0, 0 };
+    float black[4] = { 0, 0, 0, 1 };
+    V->imageCIEBackground_ = clImageCreate(V->C, 250, 250, 16, NULL);
+    vantageUpdateCIEBackground(V, NULL);
+
+    V->imageCIECrosshair_ = clImageCreate(V->C, 16, 15, 15, NULL);
+    clImageClear(V->C, V->imageCIECrosshair_, transparent);
+    clImageDrawLine(V->C, V->imageCIECrosshair_, 7, 0, 7, 14, black, 2);
+    clImageDrawLine(V->C, V->imageCIECrosshair_, 0, 7, 14, 7, black, 2);
+
     V->blits_ = NULL;
     daCreate(&V->blits_, sizeof(Blit));
     V->wantedHDR_ = 1;
@@ -183,6 +200,14 @@ void vantageDestroy(Vantage * V)
     if (V->imageFont_) {
         clImageDestroy(V->C, V->imageFont_);
         V->imageFont_ = NULL;
+    }
+    if (V->imageCIEBackground_) {
+        clImageDestroy(V->C, V->imageCIEBackground_);
+        V->imageCIEBackground_ = NULL;
+    }
+    if (V->imageCIECrosshair_) {
+        clImageDestroy(V->C, V->imageCIECrosshair_);
+        V->imageCIECrosshair_ = NULL;
     }
     clContextDestroy(V->C);
     dsDestroy(&V->diffFilename1_);
@@ -425,11 +450,31 @@ void vantageUnload(Vantage * V)
         V->highlightInfo_ = NULL;
     }
 
+    vantageUpdateCIEBackground(V, NULL);
+
     V->imageFileSize_ = 0;
     V->imageFileSize2_ = 0;
     V->imageInfoX_ = -1;
     V->imageInfoY_ = -1;
     V->imageDirty_ = 1;
+}
+
+static void vantageUpdateCIEBackground(Vantage * V, clProfile * profile)
+{
+    float transparent[4] = { 0, 0, 0, 0 };
+    float color709[4] = { 1, 1, 1, 0.75f };
+    float colorBlack[4] = { 0, 0, 0, 0.5f };
+    clImageClear(V->C, V->imageCIEBackground_, transparent);
+    clImageDrawCIE(V->C, V->imageCIEBackground_, colorBlack, 0);
+
+    clProfilePrimaries primaries;
+    clContextGetStockPrimaries(V->C, "bt709", &primaries);
+    clImageDrawGamut(V->C, V->imageCIEBackground_, &primaries, color709, 1, color709, 3);
+
+    if (profile) {
+        clProfileQuery(V->C, profile, &primaries, NULL, NULL);
+        clImageDrawGamut(V->C, V->imageCIEBackground_, &primaries, colorBlack, 1, colorBlack, 3);
+    }
 }
 
 static void vantageReload(Vantage * V)
@@ -880,7 +925,11 @@ void vantagePrepareImage(Vantage * V)
     }
 
     if (srcImage) {
-        if (V->diffMode_ != DIFFMODE_SHOWDIFF) {
+        if (V->diffMode_ == DIFFMODE_SHOWDIFF) {
+            vantageUpdateCIEBackground(V, NULL);
+        } else {
+            vantageUpdateCIEBackground(V, srcImage->profile);
+
             clProfileQuery(V->C, srcImage->profile, NULL, NULL, &V->imageLuminance_);
 
             if (V->srgbHighlight_) {
@@ -958,6 +1007,52 @@ static void vantageBlitImage(Vantage * V, float dx, float dy, float dw, float dh
     blit.color.b = 1.0f;
     blit.color.a = 1.0f;
     blit.mode = BM_IMAGE;
+    daPush(&V->blits_, blit);
+}
+
+static void vantageBlitCIEBackground(Vantage * V, float dx, float dy, float dw, float dh)
+{
+    if (!V->imageCIEBackground_) {
+        return;
+    }
+
+    Blit blit;
+    blit.sx = 0.0f;
+    blit.sy = 0.0f;
+    blit.sw = 1.0f;
+    blit.sh = 1.0f;
+    blit.dx = dx / V->platformW_;
+    blit.dy = dy / V->platformH_;
+    blit.dw = dw / V->platformW_;
+    blit.dh = dh / V->platformH_;
+    blit.color.r = 1.0f;
+    blit.color.g = 1.0f;
+    blit.color.b = 1.0f;
+    blit.color.a = 1.0f;
+    blit.mode = BM_CIE_BACKGROUND;
+    daPush(&V->blits_, blit);
+}
+
+static void vantageBlitCIECrosshair(Vantage * V, float dx, float dy, float dw, float dh)
+{
+    if (!V->imageCIECrosshair_) {
+        return;
+    }
+
+    Blit blit;
+    blit.sx = 0.0f;
+    blit.sy = 0.0f;
+    blit.sw = 1.0f;
+    blit.sh = 1.0f;
+    blit.dx = dx / V->platformW_;
+    blit.dy = dy / V->platformH_;
+    blit.dw = dw / V->platformW_;
+    blit.dh = dh / V->platformH_;
+    blit.color.r = 1.0f;
+    blit.color.g = 1.0f;
+    blit.color.b = 1.0f;
+    blit.color.a = 1.0f;
+    blit.mode = BM_CIE_CROSSHAIR;
     daPush(&V->blits_, blit);
 }
 
@@ -1194,6 +1289,26 @@ static void vantageRenderInfo(Vantage * V, float left, float top, float fontHeig
         vantageRenderNextLine(V, "  x            : %4.4f", pixelInfo->x);
         vantageRenderNextLine(V, "  y            : %4.4f", pixelInfo->y);
         vantageRenderNextLine(V, "  Y            : %4.4f", pixelInfo->Y);
+
+        if (V->diffMode_ != DIFFMODE_SHOWDIFF) {
+            float cieOffsetX = (360.0f - (float)V->imageCIEBackground_->width) / 2.0f;
+            float cieOffsetY = -30.0f;
+            vantageBlitCIEBackground(V,
+                                     V->nextLineX_ + cieOffsetX,
+                                     V->nextLineY_ + cieOffsetY,
+                                     (float)V->imageCIEBackground_->width,
+                                     (float)V->imageCIEBackground_->height);
+
+            float crosshairX = 1.0f + ((pixelInfo->x) * V->imageCIEBackground_->width) - (V->imageCIECrosshair_->width / 2.0f);
+            float crosshairY = 1.0f + ((1.0f - pixelInfo->y) * V->imageCIEBackground_->height) - (V->imageCIECrosshair_->height / 2.0f);
+            vantageBlitCIECrosshair(V,
+                                    V->nextLineX_ + cieOffsetX + crosshairX,
+                                    V->nextLineY_ + cieOffsetY + crosshairY,
+                                    (float)V->imageCIECrosshair_->width,
+                                    (float)V->imageCIECrosshair_->height);
+            V->nextLineY_ += (float)V->imageCIEBackground_->height;
+        }
+
         if (V->image2_) {
             pixelInfo = &V->pixelInfo2_;
 

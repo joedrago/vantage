@@ -618,6 +618,8 @@ static const int MACOS_SDR_WHITE_NITS = 200;
                 case BM_FILL:
                     texture = metalFillImage_;
                     break;
+                default:
+                    continue;
             }
 
             Uniforms uniforms;

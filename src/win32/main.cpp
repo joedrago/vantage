@@ -82,6 +82,8 @@ static ID3D11SamplerState * samplerLinear_;
 static ID3D11BlendState * blend_;
 static ID3D11ShaderResourceView * image_;
 static ID3D11ShaderResourceView * font_;
+static ID3D11ShaderResourceView * cieBackground_;
+static ID3D11ShaderResourceView * cieCrosshair_;
 static ID3D11ShaderResourceView * fill_;
 static XMVECTORF32 backgroundColor = { { { 0.000000000f, 0.000000000f, 0.000000000f, 1.000000000f } } };
 
@@ -1054,6 +1056,44 @@ static HRESULT createDevice()
         tex->Release();
     }
 
+    {
+        D3D11_TEXTURE2D_DESC desc;
+        ZeroMemory(&desc, sizeof(desc));
+        desc.Width = static_cast<UINT>(V->imageCIECrosshair_->width);
+        desc.Height = static_cast<UINT>(V->imageCIECrosshair_->height);
+        desc.MipLevels = static_cast<UINT>(1);
+        desc.ArraySize = static_cast<UINT>(1);
+        desc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        desc.CPUAccessFlags = 0;
+
+        clImagePrepareReadPixels(V->C, V->imageCIECrosshair_, CL_PIXELFORMAT_U16);
+        D3D11_SUBRESOURCE_DATA initData;
+        ZeroMemory(&initData, sizeof(initData));
+        initData.pSysMem = (const void *)V->imageCIECrosshair_->pixelsU16;
+        initData.SysMemPitch = V->imageCIECrosshair_->width * 4 * 2;
+        initData.SysMemSlicePitch = static_cast<UINT>(V->imageCIECrosshair_->width * V->imageCIECrosshair_->height * 4 * 2);
+
+        ID3D11Texture2D * tex = NULL;
+        hr = device_->CreateTexture2D(&desc, &initData, &tex);
+        if (SUCCEEDED(hr) && (tex != NULL)) {
+            D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
+            memset(&SRVDesc, 0, sizeof(SRVDesc));
+            SRVDesc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
+            SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            SRVDesc.Texture2D.MipLevels = 1;
+
+            hr = device_->CreateShaderResourceView(tex, &SRVDesc, &cieCrosshair_);
+            if (FAILED(hr)) {
+                cieCrosshair_ = nullptr;
+            }
+        }
+        tex->Release();
+    }
+
     checkHDR();
     return S_OK;
 }
@@ -1073,6 +1113,16 @@ static void destroyDevice()
     if (font_) {
         font_->Release();
         font_ = nullptr;
+    }
+
+    if (cieBackground_) {
+        cieBackground_->Release();
+        cieBackground_ = nullptr;
+    }
+
+    if (cieCrosshair_) {
+        cieCrosshair_->Release();
+        cieCrosshair_ = nullptr;
     }
 
     if (fill_) {
@@ -1209,6 +1259,51 @@ static void render()
             }
             tex->Release();
         }
+
+        if (cieBackground_) {
+            cieBackground_->Release();
+            cieBackground_ = NULL;
+        }
+
+        if (V->imageCIEBackground_) {
+            D3D11_TEXTURE2D_DESC desc;
+            ZeroMemory(&desc, sizeof(desc));
+            desc.Width = static_cast<UINT>(V->imageCIEBackground_->width);
+            desc.Height = static_cast<UINT>(V->imageCIEBackground_->height);
+            desc.MipLevels = static_cast<UINT>(1);
+            desc.ArraySize = static_cast<UINT>(1);
+            desc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
+            desc.SampleDesc.Count = 1;
+            desc.SampleDesc.Quality = 0;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            desc.CPUAccessFlags = 0;
+
+            clImagePrepareReadPixels(V->C, V->imageCIEBackground_, CL_PIXELFORMAT_U16);
+            D3D11_SUBRESOURCE_DATA initData;
+            ZeroMemory(&initData, sizeof(initData));
+            initData.pSysMem = (const void *)V->imageCIEBackground_->pixelsU16;
+            initData.SysMemPitch = V->imageCIEBackground_->width * 4 * 2;
+            initData.SysMemSlicePitch = static_cast<UINT>(V->imageCIEBackground_->width * V->imageCIEBackground_->height * 4 * 2);
+
+            ID3D11Texture2D * tex = NULL;
+            HRESULT hr = device_->CreateTexture2D(&desc, &initData, &tex);
+            if (SUCCEEDED(hr) && (tex != NULL)) {
+                D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
+                memset(&SRVDesc, 0, sizeof(SRVDesc));
+                SRVDesc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
+                SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                SRVDesc.Texture2D.MipLevels = 1;
+
+                hr = device_->CreateShaderResourceView(tex, &SRVDesc, &cieBackground_);
+                if (FAILED(hr)) {
+                    tex->Release();
+                    cieBackground_ = NULL;
+                    return;
+                }
+            }
+            tex->Release();
+        }
     }
 
     context_->OMSetRenderTargets(1, &renderTarget_, nullptr);
@@ -1246,6 +1341,12 @@ static void render()
         switch (blit->mode) {
             case BM_IMAGE:
                 context_->PSSetShaderResources(0, 1, &image_);
+                break;
+            case BM_CIE_BACKGROUND:
+                context_->PSSetShaderResources(0, 1, &cieBackground_);
+                break;
+            case BM_CIE_CROSSHAIR:
+                context_->PSSetShaderResources(0, 1, &cieCrosshair_);
                 break;
             case BM_TEXT:
                 context_->PSSetShaderResources(0, 1, &font_);

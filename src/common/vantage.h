@@ -31,6 +31,8 @@ typedef enum DiffIntensity
 typedef enum BlitMode
 {
     BM_IMAGE = 0,
+    BM_CIE_BACKGROUND,
+    BM_CIE_CROSSHAIR,
     BM_FILL,
     BM_TEXT
 } BlitMode;
@@ -101,6 +103,8 @@ typedef struct Vantage
     clImage * image_;
     clImage * image2_;
     clImage * imageFont_;
+    clImage * imageCIEBackground_;
+    clImage * imageCIECrosshair_;
     clImageDiff * imageDiff_;
     clImage * imageHighlight_;
     clImage * preparedImage_;
