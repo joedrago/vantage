@@ -29,6 +29,8 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     id<MTLRenderPipelineState> pipelineState_;
     id<MTLTexture> metalPreparedImage_;
     id<MTLTexture> metalFontImage_;
+    id<MTLTexture> metalCIEBackgroundImage_;
+    id<MTLTexture> metalCIECrosshairImage_;
     id<MTLTexture> metalFillImage_;
     id<MTLBuffer> vertices_;
     NSUInteger vertexCount_;
@@ -147,8 +149,47 @@ static const int MACOS_SDR_WHITE_NITS = 200;
                          bytesPerImage:0];
     }
 
+    [self _updateCIEBackground];
+
+    {
+        MTLTextureDescriptor * textureDescriptor = [[MTLTextureDescriptor alloc] init];
+        textureDescriptor.pixelFormat = MTLPixelFormatRGBA16Unorm;
+        textureDescriptor.width = V->imageCIECrosshair_->width;
+        textureDescriptor.height = V->imageCIECrosshair_->height;
+
+        clImagePrepareReadPixels(V->C, V->imageCIECrosshair_, CL_PIXELFORMAT_U16);
+        metalCIECrosshairImage_ = [device_ newTextureWithDescriptor:textureDescriptor];
+        MTLRegion region = MTLRegionMake2D(0, 0, textureDescriptor.width, textureDescriptor.height);
+        [metalCIECrosshairImage_ replaceRegion:region
+                                   mipmapLevel:0
+                                         slice:0
+                                     withBytes:V->imageCIECrosshair_->pixelsU16
+                                   bytesPerRow:8 * V->imageCIECrosshair_->width
+                                 bytesPerImage:0];
+    }
+
     [self _prepareNotifications];
     return self;
+}
+
+- (void)_updateCIEBackground
+{
+    metalCIEBackgroundImage_ = nil;
+
+    MTLTextureDescriptor * textureDescriptor = [[MTLTextureDescriptor alloc] init];
+    textureDescriptor.pixelFormat = MTLPixelFormatRGBA16Unorm;
+    textureDescriptor.width = V->imageCIEBackground_->width;
+    textureDescriptor.height = V->imageCIEBackground_->height;
+
+    clImagePrepareReadPixels(V->C, V->imageCIEBackground_, CL_PIXELFORMAT_U16);
+    metalCIEBackgroundImage_ = [device_ newTextureWithDescriptor:textureDescriptor];
+    MTLRegion region = MTLRegionMake2D(0, 0, textureDescriptor.width, textureDescriptor.height);
+    [metalCIEBackgroundImage_ replaceRegion:region
+                                mipmapLevel:0
+                                      slice:0
+                                  withBytes:V->imageCIEBackground_->pixelsU16
+                                bytesPerRow:8 * V->imageCIEBackground_->width
+                              bytesPerImage:0];
 }
 
 - (void)_prepareNotifications
@@ -556,6 +597,8 @@ static const int MACOS_SDR_WHITE_NITS = 200;
                                    bytesPerRow:8 * V->preparedImage_->width
                                  bytesPerImage:0];
         }
+
+        [self _updateCIEBackground];
     }
 
     vantageRender(V);
@@ -617,6 +660,12 @@ static const int MACOS_SDR_WHITE_NITS = 200;
                     break;
                 case BM_FILL:
                     texture = metalFillImage_;
+                    break;
+                case BM_CIE_BACKGROUND:
+                    texture = metalCIEBackgroundImage_;
+                    break;
+                case BM_CIE_CROSSHAIR:
+                    texture = metalCIECrosshairImage_;
                     break;
                 default:
                     continue;

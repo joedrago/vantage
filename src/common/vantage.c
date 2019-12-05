@@ -157,12 +157,12 @@ Vantage * vantageCreate(void)
     clFormat * format = clContextFindFormat(V->C, "png");
     V->imageFont_ = format->readFunc(V->C, "png", NULL, &rawFont);
 
-    float transparent[4] = { 0, 0, 0, 0 };
-    float black[4] = { 0, 0, 0, 1 };
     V->imageCIEBackground_ = clImageCreate(V->C, 250, 250, 16, NULL);
     vantageUpdateCIEBackground(V, NULL);
 
-    V->imageCIECrosshair_ = clImageCreate(V->C, 16, 15, 15, NULL);
+    float transparent[4] = { 0, 0, 0, 0 };
+    float black[4] = { 0, 0, 0, 1 };
+    V->imageCIECrosshair_ = clImageCreate(V->C, 15, 15, 16, NULL);
     clImageClear(V->C, V->imageCIECrosshair_, transparent);
     clImageDrawLine(V->C, V->imageCIECrosshair_, 7, 0, 7, 14, black, 2);
     clImageDrawLine(V->C, V->imageCIECrosshair_, 0, 7, 14, 7, black, 2);
@@ -459,21 +459,69 @@ void vantageUnload(Vantage * V)
     V->imageDirty_ = 1;
 }
 
+static clProfile * vantageCreatePreparedProfile(Vantage * V, int luminance)
+{
+    clProfilePrimaries primaries;
+    clProfileCurve curve;
+
+    int dstLuminance = 10000;
+    if (V->platformHDRActive_ && V->wantsHDR_) {
+        clContextGetStockPrimaries(V->C, "bt2020", &primaries);
+        if (V->platformLinear_) {
+            curve.type = CL_PCT_GAMMA;
+        } else {
+            curve.type = CL_PCT_PQ;
+        }
+        curve.implicitScale = 1.0f;
+        curve.gamma = 1.0f;
+        V->imageHDR_ = 1;
+    } else {
+        clContextGetStockPrimaries(V->C, "bt709", &primaries);
+        curve.type = CL_PCT_GAMMA;
+        if (V->platformLinear_) {
+            curve.gamma = 1.0f;
+        } else {
+            curve.gamma = 2.2f;
+        }
+        dstLuminance = luminance;
+        V->imageHDR_ = 0;
+    }
+    curve.implicitScale = 1.0f;
+
+    return clProfileCreate(V->C, &primaries, &curve, dstLuminance, NULL);
+}
+
 static void vantageUpdateCIEBackground(Vantage * V, clProfile * profile)
 {
     float transparent[4] = { 0, 0, 0, 0 };
-    float color709[4] = { 1, 1, 1, 0.75f };
-    float colorBlack[4] = { 0, 0, 0, 0.5f };
+    float color709[4] = { 1, 1, 1, 1 };
+    float colorBlack[4] = { 0, 0, 0, 1 };
+    int gamutThickness = 1;
+
+    if (V->platformLinear_) {
+        color709[3] = 1.0f;
+        colorBlack[3] = 1.0f;
+        gamutThickness = 2;
+    }
+
     clImageClear(V->C, V->imageCIEBackground_, transparent);
     clImageDrawCIE(V->C, V->imageCIEBackground_, colorBlack, 0);
 
     clProfilePrimaries primaries;
     clContextGetStockPrimaries(V->C, "bt709", &primaries);
-    clImageDrawGamut(V->C, V->imageCIEBackground_, &primaries, color709, 1, color709, 3);
+    clImageDrawGamut(V->C, V->imageCIEBackground_, &primaries, color709, gamutThickness, color709, 3);
 
     if (profile) {
         clProfileQuery(V->C, profile, &primaries, NULL, NULL);
-        clImageDrawGamut(V->C, V->imageCIEBackground_, &primaries, colorBlack, 1, colorBlack, 3);
+        clImageDrawGamut(V->C, V->imageCIEBackground_, &primaries, colorBlack, gamutThickness, colorBlack, 3);
+    }
+
+    if (V->platformLinear_) {
+        clProfile * preparedProfile = vantageCreatePreparedProfile(V, SRGB_LUMINANCE_DEF);
+        clImage * srcImage = V->imageCIEBackground_;
+        V->imageCIEBackground_ = clImageConvert(V->C, srcImage, 16, preparedProfile, CL_TONEMAP_AUTO, NULL);
+        clImageDestroy(V->C, srcImage);
+        clProfileDestroy(V->C, preparedProfile);
     }
 }
 
@@ -952,34 +1000,7 @@ void vantagePrepareImage(Vantage * V)
             }
         }
 
-        clProfilePrimaries primaries;
-        clProfileCurve curve;
-
-        int dstLuminance = 10000;
-        if (V->platformHDRActive_ && V->wantsHDR_) {
-            clContextGetStockPrimaries(V->C, "bt2020", &primaries);
-            if (V->platformLinear_) {
-                curve.type = CL_PCT_GAMMA;
-            } else {
-                curve.type = CL_PCT_PQ;
-            }
-            curve.implicitScale = 1.0f;
-            curve.gamma = 1.0f;
-            V->imageHDR_ = 1;
-        } else {
-            clContextGetStockPrimaries(V->C, "bt709", &primaries);
-            curve.type = CL_PCT_GAMMA;
-            if (V->platformLinear_) {
-                curve.gamma = 1.0f;
-            } else {
-                curve.gamma = 2.2f;
-            }
-            dstLuminance = preparedTonemapLuminance;
-            V->imageHDR_ = 0;
-        }
-        curve.implicitScale = 1.0f;
-
-        clProfile * profile = clProfileCreate(V->C, &primaries, &curve, dstLuminance, NULL);
+        clProfile * profile = vantageCreatePreparedProfile(V, preparedTonemapLuminance);
         V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO, preparedTonemap);
         clProfileDestroy(V->C, profile);
     }
