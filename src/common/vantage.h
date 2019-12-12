@@ -108,8 +108,8 @@ typedef struct Vantage
     clImageDiff * imageDiff_;
     clImage * imageHighlight_;
     clImage * preparedImage_;
-    clImageSRGBHighlightPixelInfo * highlightInfo_;
-    clImageSRGBHighlightStats highlightStats_;
+    clImageHDRPixelInfo * highlightInfo_;
+    clImageHDRStats highlightStats_;
     clImagePixelInfo pixelInfo_;
     clImagePixelInfo pixelInfo2_;
 

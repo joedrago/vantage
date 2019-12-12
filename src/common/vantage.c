@@ -446,7 +446,7 @@ void vantageUnload(Vantage * V)
         V->preparedImage_ = NULL;
     }
     if (V->highlightInfo_) {
-        clImageSRGBHighlightPixelInfoDestroy(V->C, V->highlightInfo_);
+        clImageHDRPixelInfoDestroy(V->C, V->highlightInfo_);
         V->highlightInfo_ = NULL;
     }
 
@@ -986,12 +986,12 @@ void vantagePrepareImage(Vantage * V)
                     V->imageHighlight_ = NULL;
                 }
                 if (V->highlightInfo_) {
-                    clImageSRGBHighlightPixelInfoDestroy(V->C, V->highlightInfo_);
+                    clImageHDRPixelInfoDestroy(V->C, V->highlightInfo_);
                     V->highlightInfo_ = NULL;
                 }
-                V->highlightInfo_ = clImageSRGBHighlightPixelInfoCreate(V->C, srcImage->width * srcImage->height);
-                V->imageHighlight_ =
-                    clImageCreateSRGBHighlight(V->C, srcImage, V->srgbLuminance_, &V->highlightStats_, V->highlightInfo_);
+
+                V->highlightInfo_ = clImageHDRPixelInfoCreate(V->C, srcImage->width * srcImage->height);
+                clImageMeasureHDR(V->C, srcImage, V->srgbLuminance_, &V->imageHighlight_, &V->highlightStats_, V->highlightInfo_, NULL);
                 srcImage = V->imageHighlight_;
 
                 // Don't tonemap the SRGB highlight
@@ -1354,8 +1354,7 @@ static void vantageRenderInfo(Vantage * V, float left, float top, float fontHeig
 
     if (V->srgbHighlight_ && V->highlightInfo_) {
         if ((V->imageInfoX_ != -1) && (V->imageInfoY_ != -1)) {
-            clImageSRGBHighlightPixel * highlightPixel =
-                &V->highlightInfo_->pixels[V->imageInfoX_ + (V->imageInfoY_ * V->image_->width)];
+            clImageHDRPixel * highlightPixel = &V->highlightInfo_->pixels[V->imageInfoX_ + (V->imageInfoY_ * V->image_->width)];
             vantageRenderNextLine(V, "");
             vantageRenderNextLine(V, "Pixel Highlight:");
             vantageRenderNextLine(V, "  Nits         : %2.2f", highlightPixel->nits);
