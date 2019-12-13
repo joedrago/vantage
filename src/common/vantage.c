@@ -1227,6 +1227,7 @@ static void vantageRenderNextLine(Vantage * V, const char * format, ...)
     V->nextLineY_ += V->nextLineHeight_;
 }
 
+
 static void vantageRenderInfo(Vantage * V, float left, float top, float fontHeight, float nextLine, Color * color)
 {
     if (V->image_) {
@@ -1355,12 +1356,14 @@ static void vantageRenderInfo(Vantage * V, float left, float top, float fontHeig
     if (V->srgbHighlight_ && V->highlightInfo_) {
         if ((V->imageInfoX_ != -1) && (V->imageInfoY_ != -1)) {
             clImageHDRPixel * highlightPixel = &V->highlightInfo_->pixels[V->imageInfoX_ + (V->imageInfoY_ * V->image_->width)];
+            float outOfGamut = CL_CLAMP(highlightPixel->saturation - 1.0f, 0.0f, 1.0f);
             vantageRenderNextLine(V, "");
             vantageRenderNextLine(V, "Pixel Highlight:");
             vantageRenderNextLine(V, "  Nits         : %2.2f", highlightPixel->nits);
             vantageRenderNextLine(V, "  SRGB Max Nits: %2.2f", highlightPixel->maxNits);
             vantageRenderNextLine(V, "  Overbright   : %2.2f%%", 100.0f * highlightPixel->nits / highlightPixel->maxNits);
-            vantageRenderNextLine(V, "  Out of Gamut : %2.2f%%", 100.0f * highlightPixel->outOfGamut);
+            vantageRenderNextLine(V, "  Saturation   : %2.2f", highlightPixel->saturation);
+            vantageRenderNextLine(V, "  Out of Gamut : %2.2f%%", 100.0f * outOfGamut);
         }
         vantageRenderNextLine(V, "");
         vantageRenderNextLine(V, "Highlight Stats:");
