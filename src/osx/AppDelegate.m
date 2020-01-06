@@ -70,6 +70,12 @@
     [[NSNotificationCenter defaultCenter] postNotificationName:@"toggleTonemapSliders" object:self];
 }
 
+// View / Toggle MaxEDR Clip
+- (IBAction)toggleMaxEDRClip:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"toggleMaxEDRClip" object:self];
+}
+
 // View / Show Overlay
 - (IBAction)showOverlay:sender
 {

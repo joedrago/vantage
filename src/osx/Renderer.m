@@ -34,6 +34,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     id<MTLTexture> metalFillImage_;
     id<MTLBuffer> vertices_;
     NSUInteger vertexCount_;
+    int wasMaxEDRClipped_;
 
     // Awful hacks, don't look at this!
     bool windowTitleSet_;
@@ -62,6 +63,8 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     vantagePlatformSetHDRActive(V, 1);
     vantagePlatformSetHDRAvailable(V, 1);
 
+    wasMaxEDRClipped_ = 0;
+
     // --------------------------------------------------------------------------------------------
     // Init Metal
 
@@ -75,7 +78,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     metalLayer.colorspace = colorspace;
     CGColorSpaceRelease(colorspace);
     metalLayer.EDRMetadata = [CAEDRMetadata HDR10MetadataWithMinLuminance:0
-                                                             maxLuminance:10000.0f
+                                                             maxLuminance:vantageClipCeiling(V)
                                                        opticalOutputScale:MACOS_SDR_WHITE_NITS];
     view.colorPixelFormat = MTLPixelFormatRGBA16Float;
     view.sampleCount = 1;
@@ -201,6 +204,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     [center addObserver:self selector:@selector(nextImage:) name:@"nextImage" object:nil];
     [center addObserver:self selector:@selector(toggleSRGB:) name:@"toggleSRGB" object:nil];
     [center addObserver:self selector:@selector(toggleTonemapSliders:) name:@"toggleTonemapSliders" object:nil];
+    [center addObserver:self selector:@selector(toggleMaxEDRClip:) name:@"toggleMaxEDRClip" object:nil];
     [center addObserver:self selector:@selector(showOverlay:) name:@"showOverlay" object:nil];
     [center addObserver:self selector:@selector(hideOverlay:) name:@"hideOverlay" object:nil];
     [center addObserver:self selector:@selector(diffCurrentImageAgainst:) name:@"diffCurrentImageAgainst" object:nil];
@@ -269,6 +273,11 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 - (void)toggleTonemapSliders:(NSNotification *)notification
 {
     vantageToggleTonemapSliders(V);
+}
+
+- (void)toggleMaxEDRClip:(NSNotification *)notification
+{
+    vantageToggleMaxEDRClip(V);
 }
 
 - (void)showOverlay:(NSNotification *)notification
@@ -608,15 +617,18 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 
     vantagePlatformSetMaxEDR(V, view_.window.screen.maximumPotentialExtendedDynamicRangeColorComponentValue);
 
-    if (V->wantedHDR_ != V->wantsHDR_) {
+    if ((V->wantedHDR_ != V->wantsHDR_) || (wasMaxEDRClipped_ != V->preparedMaxEDRClip_)) {
+        wasMaxEDRClipped_ = V->preparedMaxEDRClip_;
+
         CAMetalLayer * metalLayer = (CAMetalLayer *)view.layer;
         CGColorSpaceRef colorspace;
         if (V->wantsHDR_) {
-            NSLog(@"Switching to BT.2020");
+            float clipCeiling = vantageClipCeiling(V);
+            NSLog(@"Switching to BT.2020 (Clip Ceiling: %2.2f)", clipCeiling);
             colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
             metalLayer.wantsExtendedDynamicRangeContent = YES;
             metalLayer.EDRMetadata = [CAEDRMetadata HDR10MetadataWithMinLuminance:0
-                                                                     maxLuminance:10000.0f
+                                                                     maxLuminance:clipCeiling
                                                                opticalOutputScale:MACOS_SDR_WHITE_NITS];
         } else {
             NSLog(@"Switching to BT.709");
@@ -685,7 +697,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
             uniforms.vertexOffset.x = blit->dx;
             uniforms.vertexOffset.y = blit->dy;
             if ((blit->mode != BM_IMAGE) || V->wantsHDR_) {
-                uniforms.overrange = 10000.0f / (float)MACOS_SDR_WHITE_NITS;
+                uniforms.overrange = vantageClipCeiling(V) / (float)MACOS_SDR_WHITE_NITS;
             } else {
                 uniforms.overrange = 1.0f;
             }

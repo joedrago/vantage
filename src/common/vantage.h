@@ -133,6 +133,7 @@ typedef struct Vantage
     // Prepared image tonemapping
     clTonemapParams preparedTonemap_;
     int preparedTonemapLuminance_;
+    int preparedMaxEDRClip_; // bool
     Control preparedTonemapContrastSlider_;
     Control preparedTonemapClipPointSlider_;
     Control preparedTonemapSpeedSlider_;
@@ -174,6 +175,7 @@ typedef struct Vantage
     Color nextLineColor_;
     int wantsHDR_;
     int wantedHDR_;
+    float lastMaxEDR_;
 
     // Glyph information
     dynMap * glyphs_;
@@ -203,6 +205,7 @@ void vantageToggleSrgbHighlight(Vantage * V);
 void vantageSetVideoFrameIndex(Vantage * V, int videoFrameIndex);
 void vantageSetVideoFrameIndexPercentOffset(Vantage * V, int percentOffset);
 void vantageToggleTonemapSliders(Vantage * V);
+void vantageToggleMaxEDRClip(Vantage * V);
 
 // Positioning
 void vantageCalcCenteredImagePos(Vantage * V, float * posX, float * posY);
@@ -228,6 +231,7 @@ void vantagePlatformSetMaxEDR(Vantage * V, float maxEDR);
 void vantagePrepareImage(Vantage * V);
 void vantageRender(Vantage * V);
 int vantageImageUsesLinearSampling(Vantage * V); // Returns nonzero if images should render with linear sampling
+float vantageClipCeiling(Vantage * V);
 
 // Helpers
 int vantageIsImageFile(const char * filename);
