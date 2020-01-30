@@ -1010,7 +1010,7 @@ void vantagePrepareImage(Vantage * V)
 
                 V->highlightInfo_ = clImageHDRPixelInfoCreate(V->C, srcImage->width * srcImage->height);
                 clImageHDRQuantization quant;
-                clImageMeasureHDR(V->C, srcImage, V->srgbLuminance_, 0.0f, &V->imageHighlight_, &V->highlightStats_, NULL, &quant);
+                clImageMeasureHDR(V->C, srcImage, V->srgbLuminance_, 0.0f, &V->imageHighlight_, &V->highlightStats_, V->highlightInfo_, &quant);
                 srcImage = V->imageHighlight_;
 
                 // Don't tonemap the SRGB highlight
