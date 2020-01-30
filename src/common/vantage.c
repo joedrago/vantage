@@ -475,7 +475,7 @@ static clProfile * vantageCreatePreparedProfile(Vantage * V, int luminance)
     clProfilePrimaries primaries;
     clProfileCurve curve;
 
-    int dstLuminance = vantageClipCeiling(V);
+    int dstLuminance = (int)vantageClipCeiling(V);
     if (V->platformHDRActive_ && V->wantsHDR_) {
         clContextGetStockPrimaries(V->C, "bt2020", &primaries);
         if (V->platformLinear_) {
