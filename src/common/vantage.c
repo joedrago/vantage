@@ -287,6 +287,33 @@ void vantageFileListAppend(Vantage * V, const char * filename)
     daPush(&V->filenames_, s);
 }
 
+static clImage * vantageTransform(Vantage * V, clImage * image)
+{
+    if (image == NULL) {
+        return image;
+    }
+
+    if ((V->C->readExtraInfo.crop[2] > 0) && (V->C->readExtraInfo.crop[3] > 0)) {
+        int * crop = V->C->readExtraInfo.crop;
+        clImage * cropped = clImageCrop(V->C, image, crop[0], crop[1], crop[2], crop[3], clTrue);
+        if (cropped) {
+            clImageDestroy(V->C, image);
+            image = cropped;
+        }
+    }
+    if (V->C->readExtraInfo.cwRotationsNeeded) {
+        clImage * rotated = clImageRotate(V->C, image, V->C->readExtraInfo.cwRotationsNeeded);
+        clImageDestroy(V->C, image);
+        image = rotated;
+    }
+    if (V->C->readExtraInfo.mirrorNeeded) {
+        clImage * mirrored = clImageMirror(V->C, image, V->C->readExtraInfo.mirrorNeeded - 1);
+        clImageDestroy(V->C, image);
+        image = mirrored;
+    }
+    return image;
+}
+
 void vantageLoad(Vantage * V, int offset)
 {
     if (daSize(&V->filenames_) < 1) {
@@ -321,7 +348,7 @@ void vantageLoad(Vantage * V, int offset)
     const char * outFormatName = NULL;
     V->imageFileSize_ = clFileSize(filename);
     V->imageFileSize2_ = 0;
-    V->image_ = clContextRead(V->C, filename, NULL, &outFormatName);
+    V->image_ = vantageTransform(V, clContextRead(V->C, filename, NULL, &outFormatName));
     V->imageVideoFrameIndex_ = V->C->readExtraInfo.frameIndex;
     V->imageVideoFrameCount_ = V->C->readExtraInfo.frameCount;
     V->imageVideoFrameIndexSlider_.min = 0;
@@ -372,8 +399,8 @@ void vantageLoadDiff(Vantage * V, const char * filename1, const char * filename2
     const char * failureReason = NULL;
     V->imageFileSize_ = clFileSize(V->diffFilename1_);
     V->imageFileSize2_ = clFileSize(V->diffFilename2_);
-    V->image_ = clContextRead(V->C, V->diffFilename1_, NULL, NULL);
-    V->image2_ = clContextRead(V->C, V->diffFilename2_, NULL, NULL);
+    V->image_ = vantageTransform(V, clContextRead(V->C, V->diffFilename1_, NULL, NULL));
+    V->image2_ = vantageTransform(V, clContextRead(V->C, V->diffFilename2_, NULL, NULL));
     if (!V->image_ || !V->image2_) {
         failureReason = "Both failed to load";
     } else if (!V->image_) {
