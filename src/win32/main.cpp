@@ -1304,6 +1304,8 @@ static void render()
             }
             tex->Release();
         }
+
+        V->imageDirty_ = 0;
     }
 
     context_->OMSetRenderTargets(1, &renderTarget_, nullptr);
