@@ -1257,7 +1257,9 @@ static void render()
                     return;
                 }
             }
-            tex->Release();
+            if (tex) {
+                tex->Release();
+            }
         }
 
         if (cieBackground_) {
@@ -1302,7 +1304,9 @@ static void render()
                     return;
                 }
             }
-            tex->Release();
+            if (tex) {
+                tex->Release();
+            }
         }
 
         V->imageDirty_ = 0;
