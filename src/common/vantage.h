@@ -206,6 +206,7 @@ void vantageSetVideoFrameIndex(Vantage * V, int videoFrameIndex);
 void vantageSetVideoFrameIndexPercentOffset(Vantage * V, int percentOffset);
 void vantageToggleTonemapSliders(Vantage * V);
 void vantageToggleMaxEDRClip(Vantage * V);
+void vantageSetUnspecLuminance(Vantage * V, int unspecLuminance);
 
 // Positioning
 void vantageCalcCenteredImagePos(Vantage * V, float * posX, float * posY);

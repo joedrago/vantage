@@ -678,6 +678,13 @@ void vantageToggleMaxEDRClip(Vantage * V)
     vantageKickOverlay(V);
 }
 
+void vantageSetUnspecLuminance(Vantage * V, int unspecLuminance)
+{
+    V->unspecLuminance_ = unspecLuminance;
+    vantagePrepareImage(V);
+    vantageKickOverlay(V);
+}
+
 // --------------------------------------------------------------------------------------
 // Positioning
 

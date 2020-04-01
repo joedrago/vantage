@@ -86,6 +86,7 @@ static ID3D11ShaderResourceView * cieBackground_;
 static ID3D11ShaderResourceView * cieCrosshair_;
 static ID3D11ShaderResourceView * fill_;
 static XMVECTORF32 backgroundColor = { { { 0.000000000f, 0.000000000f, 0.000000000f, 1.000000000f } } };
+static int lastSDRWhiteLevel_ = 0;
 
 // Forward declarations
 static void setMenuVisible(bool visible);
@@ -667,6 +668,30 @@ static bool GetPathInfo(HMONITOR monitor, DISPLAYCONFIG_PATH_INFO * path_info)
     return false;
 }
 
+static int GetMonitorSDRWhiteLevel(HMONITOR monitor)
+{
+    int ret = 80;
+    DISPLAYCONFIG_PATH_INFO path_info = {};
+    if (!GetPathInfo(monitor, &path_info))
+        return ret;
+
+    DISPLAYCONFIG_SDR_WHITE_LEVEL white_level = {};
+    white_level.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+    white_level.header.size = sizeof(white_level);
+    white_level.header.adapterId = path_info.targetInfo.adapterId;
+    white_level.header.id = path_info.targetInfo.id;
+    if (DisplayConfigGetDeviceInfo(&white_level.header) != ERROR_SUCCESS)
+        return ret;
+    ret = (int)white_level.SDRWhiteLevel * 80 / 1000;
+    return ret;
+}
+
+static int sdrWhiteLevel()
+{
+    HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+    return GetMonitorSDRWhiteLevel(monitor);
+}
+
 static void resizeSwapChain(bool initializing)
 {
     if (!swapChain_) {
@@ -1203,6 +1228,12 @@ static void render()
 {
     if (V->wantedHDR_ != V->wantsHDR_) {
         checkHDR();
+    }
+
+    int whiteLevel = sdrWhiteLevel();
+    if (lastSDRWhiteLevel_ != whiteLevel) {
+        lastSDRWhiteLevel_ = whiteLevel;
+        vantageSetUnspecLuminance(V, whiteLevel);
     }
 
     vantageRender(V);
