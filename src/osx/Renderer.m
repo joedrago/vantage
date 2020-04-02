@@ -199,6 +199,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 {
     NSNotificationCenter * center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(openDocument:) name:@"openDocument" object:nil];
+    [center addObserver:self selector:@selector(openFile:) name:@"openFile" object:nil];
     [center addObserver:self selector:@selector(resetImagePosition:) name:@"resetImagePosition" object:nil];
     [center addObserver:self selector:@selector(previousImage:) name:@"previousImage" object:nil];
     [center addObserver:self selector:@selector(nextImage:) name:@"nextImage" object:nil];
