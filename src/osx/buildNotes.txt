@@ -26,15 +26,18 @@ To hook up a new menu / keybind:
 
 To make a Release build:
 
-* Make a new Scheme, point at Vantage, name it Vantage Release
-* Change everything in there to Release, remove debug flag
-* Build
+* Build Settings / Installation Directory / Release => /Applications
+* Hook up AppIcon in General tab (TODO: figure out why this isn't automatic)
+* Make sure codesigning is setup right
+* Make sure hardening is enabled
+* Make sure Version and Deployment Target are correct in General
+* Archive
+* Organizer should appear
+  * Distribute App
+  * if you need to "sign relevant contracts", visit developer.apple.com, click Account, sign in
+  * wait for notarization
+  * hit Distribute App again, export
 * sudo pip3 install dmgbuild
-* Run in build.vantage/Release dir:
+* Run in exported dir:
   * coffee /path/to/vantageSource/src/osx/package/package.coffee
-* Notarize the package
-   * xcrun altool --notarize-app --primary-bundle-id joedrago.Vantage --username "email@here" --password one-time-password-here --file vantage-VERSION_HERE.dmg
-   * xcrun altool --notarization-history 0 --username "email@here" --password one-time-password-here
-   * xcrun stapler staple Vantage.app
-   * rerun: coffee /path/to/vantageSource/src/osx/package/package.coffee
-   * upload final dmg
+* upload final dmg
