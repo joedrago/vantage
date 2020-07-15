@@ -629,7 +629,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 DragFinish(drop);
                 if (filename1[0]) {
                     const char * detectedFormat = clFormatDetect(V->C, filename1);
-                    if (!strcmp(detectedFormat, "icc")) {
+                    if (detectedFormat && !strcmp(detectedFormat, "icc")) {
                         vantageForceProfile(V, filename1);
                     } else {
                         loadAdjacentPaths(filename1);
