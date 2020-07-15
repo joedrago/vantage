@@ -35,6 +35,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     id<MTLBuffer> vertices_;
     NSUInteger vertexCount_;
     int wasMaxEDRClipped_;
+    NSColorWell * colorWell_;
 
     // Awful hacks, don't look at this!
     bool windowTitleSet_;
@@ -46,6 +47,8 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     if (!self) {
         return self;
     }
+
+    colorWell_ = NULL;
 
     // --------------------------------------------------------------------------------------------
     // Stash off values
@@ -200,6 +203,9 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     NSNotificationCenter * center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(openDocument:) name:@"openDocument" object:nil];
     [center addObserver:self selector:@selector(openFile:) name:@"openFile" object:nil];
+    [center addObserver:self selector:@selector(fileForceProfile:) name:@"fileForceProfile" object:nil];
+    [center addObserver:self selector:@selector(fileForceProfileByPanel:) name:@"fileForceProfileByPanel" object:nil];
+    [center addObserver:self selector:@selector(fileClearForcedProfile:) name:@"fileClearForcedProfile" object:nil];
     [center addObserver:self selector:@selector(resetImagePosition:) name:@"resetImagePosition" object:nil];
     [center addObserver:self selector:@selector(previousImage:) name:@"previousImage" object:nil];
     [center addObserver:self selector:@selector(nextImage:) name:@"nextImage" object:nil];
@@ -310,6 +316,59 @@ static const int MACOS_SDR_WHITE_NITS = 200;
             }
         }
     }
+}
+
+- (void)changeColor:(id)sender
+{
+    if(colorWell_) {
+        NSColor * color = [colorWell_ color];
+        if(color) {
+            NSColorSpace * colorSpace = [color colorSpace];
+            if(colorSpace) {
+                NSData * iccProfile = [colorSpace ICCProfileData];
+                if(iccProfile) {
+                     const uint8_t * bytes = (const uint8_t *)[iccProfile bytes];
+                     NSUInteger len = [iccProfile length];
+                     if(bytes && len) {
+                        vantageForceProfileRaw(V, bytes, len);
+                     }
+                }
+            }
+        }
+    }
+}
+
+- (void)fileForceProfileByPanel:(NSNotification *)notification
+{
+   if(!colorWell_) {
+        colorWell_ = [[NSColorWell alloc] init];
+    }
+    [colorWell_ setAction:@selector(changeColor:)];
+    [colorWell_ setTarget:self];
+    [colorWell_ activate:YES];
+}
+
+- (void)fileForceProfile:(NSNotification *)notification
+{
+    NSOpenPanel * openDlg = [NSOpenPanel openPanel];
+    [openDlg setCanChooseFiles:YES];
+    [openDlg setAllowsMultipleSelection:YES];
+    [openDlg setCanChooseDirectories:NO];
+    if ([openDlg runModal] == NSModalResponseOK) {
+        NSArray * urls = [openDlg URLs];
+        if ([urls count] > 0) {
+            NSString * fileScheme = @"file";
+            NSURL * url = [urls objectAtIndex:0];
+            if ([url.scheme isEqualToString:fileScheme]) {
+                vantageForceProfile(V, [url.path UTF8String]);
+            }
+        }
+    }
+}
+
+- (void)fileClearForcedProfile:(NSNotification *)notification
+{
+    vantageForceProfile(V, NULL);
 }
 
 - (void)showImage1:(NSNotification *)notification
@@ -463,6 +522,12 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 - (void)loadImage:(nonnull NSString *)path diff:(nullable NSString *)diffPath
 {
     if (diffPath == nil) {
+        const char *detectedFormat = clFormatDetect(V->C, [path UTF8String]);
+        if(detectedFormat && !strcmp(detectedFormat, "icc")) {
+            vantageForceProfile(V, [path UTF8String]);
+            return;
+        }
+
         vantageFileListClear(V);
 
         char * cpath = NULL;

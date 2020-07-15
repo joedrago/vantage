@@ -40,6 +40,24 @@
     [[NSNotificationCenter defaultCenter] postNotificationName:@"openDocument" object:self];
 }
 
+// File / Force Profile...
+- (IBAction)fileForceProfile:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"fileForceProfile" object:self];
+}
+
+// File / Force Profile by Color Picker
+- (IBAction)fileForceProfileByPanel:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"fileForceProfileByPanel" object:self];
+}
+
+// File / Clear Forced Profile
+- (IBAction)fileClearForcedProfile:sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"fileClearForcedProfile" object:self];
+}
+
 // View / Reset Image Position
 - (IBAction)resetImagePosition:sender
 {

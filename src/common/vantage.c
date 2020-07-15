@@ -603,6 +603,20 @@ void vantageForceProfile(Vantage * V, const char * filename)
     vantageLoad(V, 0);
 }
 
+void vantageForceProfileRaw(Vantage * V, const uint8_t *iccData, uint32_t iccLen)
+{
+    if (V->forcedProfile_) {
+        clProfileDestroy(V->C, V->forcedProfile_);
+        V->forcedProfile_ = NULL;
+    }
+
+    if (iccData && iccLen) {
+        V->forcedProfile_ = clProfileParse(V->C, iccData, iccLen, NULL);
+    }
+
+    vantageLoad(V, 0);
+}
+
 // --------------------------------------------------------------------------------------
 // Special mode state
 

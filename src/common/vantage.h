@@ -200,6 +200,7 @@ void vantageRefresh(Vantage * V);
 
 // Forced profile
 void vantageForceProfile(Vantage * V, const char * filename);
+void vantageForceProfileRaw(Vantage * V, const uint8_t *iccData, uint32_t iccLen);
 
 // Special mode state
 void vantageAdjustThreshold(Vantage * V, int amount);

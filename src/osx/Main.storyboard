@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="15702" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" initialViewController="B8D-0N-5wS">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="16097" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" initialViewController="B8D-0N-5wS">
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="15702"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="16097"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -76,6 +76,24 @@
                                                     </menuItem>
                                                 </items>
                                             </menu>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="9rE-dN-oth"/>
+                                        <menuItem title="Force Profile…" keyEquivalent="p" id="dpl-6l-BgX">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="fileForceProfile:" target="Ady-hI-5gd" id="D0L-d8-ayL"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Force Profile By Color Picker" keyEquivalent="p" id="F8i-V9-i4f">
+                                            <connections>
+                                                <action selector="fileForceProfileByPanel:" target="Ady-hI-5gd" id="qNY-K4-XWO"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Clear Forced Profile" keyEquivalent="0" id="oiy-dP-6P6">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="fileClearForcedProfile:" target="Ady-hI-5gd" id="4h8-OG-R3U"/>
+                                            </connections>
                                         </menuItem>
                                     </items>
                                     <connections>
