@@ -110,6 +110,7 @@ Vantage * vantageCreate(void)
 
     V->image_ = NULL;
     V->image2_ = NULL;
+    V->forcedProfile_ = NULL;
     V->imageFont_ = NULL;
     V->imageCIEBackground_ = NULL;
     V->imageCIECrosshair_ = NULL;
@@ -369,6 +370,11 @@ void vantageLoad(Vantage * V, int offset)
         shortFilename = filename;
     }
 
+    if (V->image_ && V->forcedProfile_) {
+        clProfileDestroy(V->C, V->image_->profile);
+        V->image_->profile = clProfileClone(V->C, V->forcedProfile_);
+    }
+
     vantagePrepareImage(V);
     vantageResetImagePos(V);
     clearOverlay(V);
@@ -578,6 +584,23 @@ void vantageRefresh(Vantage * V)
 {
     V->loadWaitFrames_ = LOADING_FRAMES;
     V->imageVideoFrameNextIndex_ = V->imageVideoFrameIndex_;
+}
+
+// --------------------------------------------------------------------------------------
+// Forced profile
+
+void vantageForceProfile(Vantage * V, const char * filename)
+{
+    if (V->forcedProfile_) {
+        clProfileDestroy(V->C, V->forcedProfile_);
+        V->forcedProfile_ = NULL;
+    }
+
+    if (filename != NULL) {
+        V->forcedProfile_ = clProfileRead(V->C, filename);
+    }
+
+    vantageLoad(V, 0);
 }
 
 // --------------------------------------------------------------------------------------
@@ -1581,7 +1604,11 @@ void vantageRender(Vantage * V)
                 char profileDescription[256];
                 clProfileDescribe(V->C, profile, profileDescription, sizeof(profileDescription));
                 const char * profileName = profile->description ? profile->description : "";
-                dsPrintf(&V->tempTextBuffer_, "Profile: %s (%s)", profileName, profileDescription);
+                const char * forcedString = "";
+                if (V->forcedProfile_) {
+                    forcedString = " [Forced]";
+                }
+                dsPrintf(&V->tempTextBuffer_, "Profile:%s %s (%s)", forcedString, profileName, profileDescription);
                 vantageBlitString(V, V->tempTextBuffer_, 10, blTop, fontHeight, &color);
                 blTop -= nextLine;
             }

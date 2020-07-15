@@ -217,6 +217,29 @@ static void fileOpen()
     }
 }
 
+static void fileForceProfile()
+{
+    char filename[MAX_PATH];
+
+    OPENFILENAME ofn;
+    ZeroMemory(&ofn, sizeof(OPENFILENAME));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd_;
+    ofn.lpstrFile = filename;
+    ofn.lpstrFile[0] = '\0';
+    ofn.nMaxFile = sizeof(filename);
+    ofn.lpstrFilter = "ICC Profiles (*.icc)\0*.icc\0All Files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    if (GetOpenFileName(&ofn)) {
+        vantageForceProfile(V, filename);
+    }
+}
+
 static void diffOpen()
 {
     if (daSize(&V->filenames_) < 1) {
@@ -302,6 +325,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         case WM_CHAR: {
             unsigned int key = (unsigned int)wParam;
             switch (key) {
+                case 48: // 0
+                    vantageForceProfile(V, NULL);
+                    break;
                 case 49: // 1
                     vantageSetDiffMode(V, DIFFMODE_SHOW1);
                     break;
@@ -340,6 +366,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     break;
                 case 111: // O
                     fileOpen();
+                    break;
+                case 112: // P
+                    fileForceProfile();
                     break;
                 case 113: // Q
                     PostQuitMessage(0);
@@ -433,6 +462,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     break;
                 case ID_FILE_OPEN:
                     fileOpen();
+                    break;
+
+                case ID_FILE_FORCEPROFILE:
+                    fileForceProfile();
+                    break;
+                case ID_FILE_CLEARFORCEDPROFILE:
+                    vantageForceProfile(V, NULL);
                     break;
 
                 case ID_VIEW_PREVIOUSIMAGE:
@@ -592,7 +628,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 DragQueryFile(drop, 0, filename1, MAX_PATH);
                 DragFinish(drop);
                 if (filename1[0]) {
-                    loadAdjacentPaths(filename1);
+                    const char * detectedFormat = clFormatDetect(V->C, filename1);
+                    if (!strcmp(detectedFormat, "icc")) {
+                        vantageForceProfile(V, filename1);
+                    } else {
+                        loadAdjacentPaths(filename1);
+                    }
                 }
             }
             break;

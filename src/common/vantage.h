@@ -102,6 +102,7 @@ typedef struct Vantage
     clContext * C;
     clImage * image_;
     clImage * image2_;
+    clProfile * forcedProfile_;
     clImage * imageFont_;
     clImage * imageCIEBackground_;
     clImage * imageCIECrosshair_;
@@ -196,6 +197,9 @@ void vantageLoad(Vantage * V, int offset);
 void vantageLoadDiff(Vantage * V, const char * filename1, const char * filename2);
 void vantageUnload(Vantage * V);
 void vantageRefresh(Vantage * V);
+
+// Forced profile
+void vantageForceProfile(Vantage * V, const char * filename);
 
 // Special mode state
 void vantageAdjustThreshold(Vantage * V, int amount);
