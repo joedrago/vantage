@@ -200,7 +200,7 @@ void vantageRefresh(Vantage * V);
 
 // Forced profile
 void vantageForceProfile(Vantage * V, const char * filename);
-void vantageForceProfileRaw(Vantage * V, const uint8_t *iccData, uint32_t iccLen);
+void vantageForceProfileRaw(Vantage * V, const uint8_t * iccData, uint32_t iccLen);
 
 // Special mode state
 void vantageAdjustThreshold(Vantage * V, int amount);
@@ -237,7 +237,6 @@ void vantagePlatformSetMaxEDR(Vantage * V, float maxEDR);
 void vantagePrepareImage(Vantage * V);
 void vantageRender(Vantage * V);
 int vantageImageUsesLinearSampling(Vantage * V); // Returns nonzero if images should render with linear sampling
-float vantageClipCeiling(Vantage * V);
 
 // Helpers
 int vantageIsImageFile(const char * filename);

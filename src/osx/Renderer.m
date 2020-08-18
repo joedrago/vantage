@@ -12,7 +12,7 @@
 #import "colorist/colorist.h"
 
 static const NSUInteger kMaxBuffersInFlight = 3;
-static const int MACOS_SDR_WHITE_NITS = 200;
+static const int MACOS_SDR_WHITE_NITS = 100;
 
 @implementation Renderer {
     // Vantage
@@ -34,7 +34,6 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     id<MTLTexture> metalFillImage_;
     id<MTLBuffer> vertices_;
     NSUInteger vertexCount_;
-    int wasMaxEDRClipped_;
     NSColorWell * colorWell_;
 
     // Awful hacks, don't look at this!
@@ -66,8 +65,6 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     vantagePlatformSetHDRActive(V, 1);
     vantagePlatformSetHDRAvailable(V, 1);
 
-    wasMaxEDRClipped_ = 0;
-
     // --------------------------------------------------------------------------------------------
     // Init Metal
 
@@ -80,9 +77,6 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
     metalLayer.colorspace = colorspace;
     CGColorSpaceRelease(colorspace);
-    metalLayer.EDRMetadata = [CAEDRMetadata HDR10MetadataWithMinLuminance:0
-                                                             maxLuminance:vantageClipCeiling(V)
-                                                       opticalOutputScale:MACOS_SDR_WHITE_NITS];
     view.colorPixelFormat = MTLPixelFormatRGBA16Float;
     view.sampleCount = 1;
 
@@ -211,7 +205,6 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     [center addObserver:self selector:@selector(nextImage:) name:@"nextImage" object:nil];
     [center addObserver:self selector:@selector(toggleSRGB:) name:@"toggleSRGB" object:nil];
     [center addObserver:self selector:@selector(toggleTonemapSliders:) name:@"toggleTonemapSliders" object:nil];
-    [center addObserver:self selector:@selector(toggleMaxEDRClip:) name:@"toggleMaxEDRClip" object:nil];
     [center addObserver:self selector:@selector(showOverlay:) name:@"showOverlay" object:nil];
     [center addObserver:self selector:@selector(hideOverlay:) name:@"hideOverlay" object:nil];
     [center addObserver:self selector:@selector(diffCurrentImageAgainst:) name:@"diffCurrentImageAgainst" object:nil];
@@ -282,11 +275,6 @@ static const int MACOS_SDR_WHITE_NITS = 200;
     vantageToggleTonemapSliders(V);
 }
 
-- (void)toggleMaxEDRClip:(NSNotification *)notification
-{
-    vantageToggleMaxEDRClip(V);
-}
-
 - (void)showOverlay:(NSNotification *)notification
 {
     vantageKickOverlay(V);
@@ -320,18 +308,18 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 
 - (void)changeColor:(id)sender
 {
-    if(colorWell_) {
+    if (colorWell_) {
         NSColor * color = [colorWell_ color];
-        if(color) {
+        if (color) {
             NSColorSpace * colorSpace = [color colorSpace];
-            if(colorSpace) {
+            if (colorSpace) {
                 NSData * iccProfile = [colorSpace ICCProfileData];
-                if(iccProfile) {
-                     const uint8_t * bytes = (const uint8_t *)[iccProfile bytes];
-                     NSUInteger len = [iccProfile length];
-                     if(bytes && len) {
+                if (iccProfile) {
+                    const uint8_t * bytes = (const uint8_t *)[iccProfile bytes];
+                    NSUInteger len = [iccProfile length];
+                    if (bytes && len) {
                         vantageForceProfileRaw(V, bytes, len);
-                     }
+                    }
                 }
             }
         }
@@ -340,7 +328,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 
 - (void)fileForceProfileByPanel:(NSNotification *)notification
 {
-   if(!colorWell_) {
+    if (!colorWell_) {
         colorWell_ = [[NSColorWell alloc] init];
     }
     [colorWell_ setAction:@selector(changeColor:)];
@@ -522,8 +510,8 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 - (void)loadImage:(nonnull NSString *)path diff:(nullable NSString *)diffPath
 {
     if (diffPath == nil) {
-        const char *detectedFormat = clFormatDetect(V->C, [path UTF8String]);
-        if(detectedFormat && !strcmp(detectedFormat, "icc")) {
+        const char * detectedFormat = clFormatDetect(V->C, [path UTF8String]);
+        if (detectedFormat && !strcmp(detectedFormat, "icc")) {
             vantageForceProfile(V, [path UTF8String]);
             return;
         }
@@ -683,24 +671,17 @@ static const int MACOS_SDR_WHITE_NITS = 200;
 
     vantagePlatformSetMaxEDR(V, view_.window.screen.maximumPotentialExtendedDynamicRangeColorComponentValue);
 
-    if ((V->wantedHDR_ != V->wantsHDR_) || (wasMaxEDRClipped_ != V->preparedMaxEDRClip_)) {
-        wasMaxEDRClipped_ = V->preparedMaxEDRClip_;
-
+    if (V->wantedHDR_ != V->wantsHDR_) {
         CAMetalLayer * metalLayer = (CAMetalLayer *)view.layer;
         CGColorSpaceRef colorspace;
         if (V->wantsHDR_) {
-            float clipCeiling = vantageClipCeiling(V);
-            NSLog(@"Switching to BT.2020 (Clip Ceiling: %2.2f)", clipCeiling);
+            NSLog(@"Switching to BT.2020");
             colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
             metalLayer.wantsExtendedDynamicRangeContent = YES;
-            metalLayer.EDRMetadata = [CAEDRMetadata HDR10MetadataWithMinLuminance:0
-                                                                     maxLuminance:clipCeiling
-                                                               opticalOutputScale:MACOS_SDR_WHITE_NITS];
         } else {
             NSLog(@"Switching to BT.709");
             colorspace = CGColorSpaceCreateWithName(kCGColorSpaceLinearSRGB);
             metalLayer.wantsExtendedDynamicRangeContent = NO;
-            metalLayer.EDRMetadata = nil;
         }
         metalLayer.colorspace = colorspace;
         CGColorSpaceRelease(colorspace);
@@ -763,7 +744,7 @@ static const int MACOS_SDR_WHITE_NITS = 200;
             uniforms.vertexOffset.x = blit->dx;
             uniforms.vertexOffset.y = blit->dy;
             if ((blit->mode != BM_IMAGE) || V->wantsHDR_) {
-                uniforms.overrange = vantageClipCeiling(V) / (float)MACOS_SDR_WHITE_NITS;
+                uniforms.overrange = 10000.0f / (float)MACOS_SDR_WHITE_NITS;
             } else {
                 uniforms.overrange = 1.0f;
             }

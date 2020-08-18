@@ -141,7 +141,6 @@ Vantage * vantageCreate(void)
     // Setup tonemapping for SDR mode (default values here are completely subjective)
     clTonemapParamsSetDefaults(V->C, &V->preparedTonemap_);
     V->preparedTonemapLuminance_ = SRGB_LUMINANCE_DEF;
-    V->preparedMaxEDRClip_ = 0;
     controlInitSlider(&V->preparedTonemapContrastSlider_, (int *)&V->preparedTonemap_.contrast, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
     controlInitSlider(&V->preparedTonemapClipPointSlider_, (int *)&V->preparedTonemap_.clipPoint, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
     controlInitSlider(&V->preparedTonemapSpeedSlider_, (int *)&V->preparedTonemap_.speed, 1, 2000, 10, CONTROLFLAG_PREPARE | CONTROLFLAG_FLOAT);
@@ -494,21 +493,12 @@ void vantageUnload(Vantage * V)
     V->imageDirty_ = 1;
 }
 
-float vantageClipCeiling(Vantage * V)
-{
-    float ceiling = 10000.0f;
-    if ((V->platformMaxEDR_ > 0.0f) && V->preparedMaxEDRClip_) {
-        ceiling = V->platformMaxEDR_ * 100.0f;
-    }
-    return ceiling;
-}
-
 static clProfile * vantageCreatePreparedProfile(Vantage * V, int luminance)
 {
     clProfilePrimaries primaries;
     clProfileCurve curve;
 
-    int dstLuminance = (int)vantageClipCeiling(V);
+    int dstLuminance = 10000;
     if (V->platformHDRActive_ && V->wantsHDR_) {
         clContextGetStockPrimaries(V->C, "bt2020", &primaries);
         if (V->platformLinear_) {
@@ -603,7 +593,7 @@ void vantageForceProfile(Vantage * V, const char * filename)
     vantageLoad(V, 0);
 }
 
-void vantageForceProfileRaw(Vantage * V, const uint8_t *iccData, uint32_t iccLen)
+void vantageForceProfileRaw(Vantage * V, const uint8_t * iccData, uint32_t iccLen)
 {
     if (V->forcedProfile_) {
         clProfileDestroy(V->C, V->forcedProfile_);
@@ -704,13 +694,6 @@ void vantageSetVideoFrameIndexPercentOffset(Vantage * V, int percentOffset)
 void vantageToggleTonemapSliders(Vantage * V)
 {
     V->tonemapSlidersEnabled_ = !V->tonemapSlidersEnabled_;
-    vantagePrepareImage(V);
-    vantageKickOverlay(V);
-}
-
-void vantageToggleMaxEDRClip(Vantage * V)
-{
-    V->preparedMaxEDRClip_ = !V->preparedMaxEDRClip_;
     vantagePrepareImage(V);
     vantageKickOverlay(V);
 }
@@ -1091,11 +1074,7 @@ void vantagePrepareImage(Vantage * V)
         }
 
         clProfile * profile = vantageCreatePreparedProfile(V, preparedTonemapLuminance);
-        clTonemap tonemapEnabled = CL_TONEMAP_AUTO;
-        if (V->wantsHDR_ && V->preparedMaxEDRClip_) {
-            tonemapEnabled = CL_TONEMAP_OFF;
-        }
-        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, tonemapEnabled, preparedTonemap);
+        V->preparedImage_ = clImageConvert(V->C, srcImage, 16, profile, CL_TONEMAP_AUTO, preparedTonemap);
         clProfileDestroy(V->C, profile);
     }
 
@@ -1192,7 +1171,7 @@ static float vantageScaleTextLuminance(Vantage * V, float lum)
     if (V->platformHDRActive_) {
         // assume lum is SDR white level with a ~2.2 gamma, convert to PQ
         lum = powf(lum, 2.2f);
-        lum *= (float)TEXT_LUMINANCE / vantageClipCeiling(V);
+        lum *= (float)TEXT_LUMINANCE / 10000.0f;
         if (!V->platformLinear_) {
             lum = PQ_OETF(lum);
         }
@@ -1630,14 +1609,7 @@ void vantageRender(Vantage * V)
             if (V->platformHDRAvailable_) {
                 if (V->wantsHDR_) {
                     if (V->platformMaxEDR_ > 0.0f) {
-                        if (V->preparedMaxEDRClip_) {
-                            dsPrintf(&V->tempTextBuffer_,
-                                     "HDR    : Active (maxEDR: %g, clipped to %d)",
-                                     V->platformMaxEDR_,
-                                     (int)vantageClipCeiling(V));
-                        } else {
-                            dsPrintf(&V->tempTextBuffer_, "HDR    : Active (maxEDR: %g, OS Tonemapped)", V->platformMaxEDR_);
-                        }
+                        dsPrintf(&V->tempTextBuffer_, "HDR    : Active (maxEDR: %g)", V->platformMaxEDR_);
                     } else {
                         dsPrintf(&V->tempTextBuffer_, "HDR    : Active");
                     }
