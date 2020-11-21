@@ -307,7 +307,8 @@ static clImage * vantageTransform(Vantage * V, clImage * image)
         image = rotated;
     }
     if (V->C->readExtraInfo.mirrorNeeded) {
-        clImage * mirrored = clImageMirror(V->C, image, V->C->readExtraInfo.mirrorNeeded - 1);
+        const int horizontal = (V->C->readExtraInfo.mirrorNeeded == 1);
+        clImage * mirrored = clImageMirror(V->C, image, horizontal);
         clImageDestroy(V->C, image);
         image = mirrored;
     }
