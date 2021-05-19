@@ -382,6 +382,10 @@ void vantageLoad(Vantage * V, int offset)
         appendOverlay(V, "[%d/%d] Loaded (%s): %s", V->imageFileIndex_ + 1, daSize(&V->filenames_), outFormatName, shortFilename);
     } else {
         appendOverlay(V, "[%d/%d] Failed to load (%s): %s", V->imageFileIndex_ + 1, daSize(&V->filenames_), outFormatName, shortFilename);
+        if (*V->C->readExtraInfo.diagnosticError) {
+            appendOverlay(V, "%s", V->C->readExtraInfo.diagnosticError);
+            V->C->readExtraInfo.diagnosticError[0] = 0;
+        }
     }
 }
 
